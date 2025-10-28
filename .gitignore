@@ -1,0 +1,52 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Additional Android/Gradle build artifacts
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+release/
+*/build/
+
+# Logs
+*.log
+
+# Keystore files (never commit these!)
+*.jks
+*.keystore
+
+# Android Profiling
+*.hprof
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Backup files
+*~
+*.bak
+*.swp
+*.orig
+
+# IMPORTANT: API Keys and Secrets
+# Remove API key from GeminiClient.java before committing!
+# Consider using BuildConfig or environment variables instead
