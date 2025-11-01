@@ -44,7 +44,85 @@
 
     </LinearLayout>
 
-    <!-- Chat area with card design -->
+    <!-- Emergency Type Quick Buttons -->
+    <HorizontalScrollView
+        android:id="@+id/emergencyTypeScroll"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:scrollbars="none"
+        app:layout_constraintTop_toBottomOf="@id/header"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="4dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/policeBtn"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="🚔 Police"
+                android:textSize="14sp"
+                app:strokeColor="#2196F3"
+                android:textColor="#2196F3"
+                app:cornerRadius="24dp"
+                android:layout_marginEnd="8dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/medicBtn"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="🚑 Medical"
+                android:textSize="14sp"
+                app:strokeColor="#F44336"
+                android:textColor="#F44336"
+                app:cornerRadius="24dp"
+                android:layout_marginEnd="8dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/fireBtn"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="🚒 Fire"
+                android:textSize="14sp"
+                app:strokeColor="#FF9800"
+                android:textColor="#FF9800"
+                app:cornerRadius="24dp"
+                android:layout_marginEnd="8dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/allBtn"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="🚨 All Units"
+                android:textSize="14sp"
+                app:strokeColor="#9C27B0"
+                android:textColor="#9C27B0"
+                app:cornerRadius="24dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp" />
+
+        </LinearLayout>
+
+    </HorizontalScrollView>
+
+    <!-- Chat area with RecyclerView -->
     <androidx.cardview.widget.CardView
         android:id="@+id/chatCard"
         android:layout_width="0dp"
@@ -52,31 +130,19 @@
         android:layout_margin="12dp"
         app:cardCornerRadius="16dp"
         app:cardElevation="2dp"
-        app:cardBackgroundColor="#FFFFFF"
-        app:layout_constraintTop_toBottomOf="@id/header"
+        app:cardBackgroundColor="#F8F9FA"
+        app:layout_constraintTop_toBottomOf="@id/emergencyTypeScroll"
         app:layout_constraintBottom_toTopOf="@id/inputCard"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <ScrollView
-            android:id="@+id/scroll"
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/chatRecyclerView"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:padding="16dp"
-            android:scrollbars="vertical"
-            android:fadeScrollbars="false">
-
-            <TextView
-                android:id="@+id/responseView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="💬 Start a conversation...\n\nType or speak to describe an emergency situation and get instant AI assistance."
-                android:textSize="15sp"
-                android:lineSpacingExtra="4dp"
-                android:textColor="#424242"
-                android:fontFamily="sans-serif" />
-
-        </ScrollView>
+            android:padding="8dp"
+            android:clipToPadding="false"
+            android:scrollbars="vertical" />
 
     </androidx.cardview.widget.CardView>
 
@@ -96,12 +162,35 @@
         app:layout_constraintEnd_toEndOf="parent">
 
         <LinearLayout
-            android:id="@+id/inputRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:padding="8dp">
+            android:orientation="vertical">
+
+            <!-- Quick response buttons container (initially hidden) -->
+            <HorizontalScrollView
+                android:id="@+id/quickResponseScroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:visibility="gone"
+                android:padding="8dp">
+
+                <LinearLayout
+                    android:id="@+id/quickResponseButtons"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+
+            </HorizontalScrollView>
+
+            <!-- Input row -->
+            <LinearLayout
+                android:id="@+id/inputRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="8dp">
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/speakBtn"
@@ -123,6 +212,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:hint="Describe the emergency..."
+                android:textColor="#212121"
                 android:textColorHint="#9E9E9E"
                 android:textSize="15sp"
                 android:paddingStart="12dp"
@@ -147,6 +237,8 @@
                 android:paddingEnd="20dp"
                 app:elevation="0dp"
                 android:layout_margin="4dp" />
+
+        </LinearLayout>
 
         </LinearLayout>
 

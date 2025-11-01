@@ -6,12 +6,12 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.speech.RecognizerIntent;
-import android.text.method.ScrollingMovementMethod;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
-import android.widget.TextView;
+import android.widget.LinearLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -22,9 +22,15 @@ import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.google.android.material.button.MaterialButton;
 
 import android.util.Log;
 import java.util.ArrayList;
+
+import io.noties.markwon.Markwon;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -34,9 +40,17 @@ public class MainActivity extends AppCompatActivity {
     private EditText input;
     private Button sendBtn;
     private ImageButton speakBtn;
-    private TextView responseView;
+    private RecyclerView chatRecyclerView;
+    private ChatAdapter chatAdapter;
+    private Markwon markwon;
     private GeminiClient geminiClient;
     private static final String TAG = "Respondr";
+    
+    private Button policeBtn, medicBtn, fireBtn, allBtn;
+    private String selectedEmergencyType = ""; // Track manually selected type
+    private boolean inFollowUpMode = false;
+    private LinearLayout quickResponseButtons;
+    private HorizontalScrollView quickResponseScroll;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,17 +60,73 @@ public class MainActivity extends AppCompatActivity {
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
+            
+            // Apply system bars padding to top and sides, but handle bottom differently for keyboard
+            v.setPadding(
+                systemBars.left, 
+                systemBars.top, 
+                systemBars.right, 
+                Math.max(systemBars.bottom, ime.bottom)
+            );
             return insets;
         });
 
         input = findViewById(R.id.input);
         sendBtn = findViewById(R.id.sendBtn);
         speakBtn = findViewById(R.id.speakBtn);
-        responseView = findViewById(R.id.responseView);
-        responseView.setMovementMethod(new ScrollingMovementMethod());
+        quickResponseButtons = findViewById(R.id.quickResponseButtons);
+        quickResponseScroll = findViewById(R.id.quickResponseScroll);
+        chatRecyclerView = findViewById(R.id.chatRecyclerView);
 
-    geminiClient = new GeminiClient(this);
+        // Set up RecyclerView for chat
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+        layoutManager.setStackFromEnd(true); // Start from bottom
+        chatRecyclerView.setLayoutManager(layoutManager);
+        
+        // Initialize Markwon for markdown rendering
+        markwon = Markwon.create(this);
+        chatAdapter = new ChatAdapter(markwon);
+        chatRecyclerView.setAdapter(chatAdapter);
+
+        // Add welcome message
+        chatAdapter.addMessage(new ChatMessage(
+            "💬 **Welcome to Respondr!**\n\nType or speak to describe an emergency situation and get instant AI assistance.",
+            false
+        ));
+
+        // Emergency type buttons
+        policeBtn = findViewById(R.id.policeBtn);
+        medicBtn = findViewById(R.id.medicBtn);
+        fireBtn = findViewById(R.id.fireBtn);
+        allBtn = findViewById(R.id.allBtn);
+
+        geminiClient = new GeminiClient(this);
+
+        // Emergency type button listeners
+        policeBtn.setOnClickListener(v -> {
+            selectedEmergencyType = "POLICE";
+            input.setText("I need police assistance. ");
+            input.setSelection(input.getText().length());
+        });
+
+        medicBtn.setOnClickListener(v -> {
+            selectedEmergencyType = "MEDICAL";
+            input.setText("I need medical assistance. ");
+            input.setSelection(input.getText().length());
+        });
+
+        fireBtn.setOnClickListener(v -> {
+            selectedEmergencyType = "FIRE";
+            input.setText("There's a fire emergency. ");
+            input.setSelection(input.getText().length());
+        });
+
+        allBtn.setOnClickListener(v -> {
+            selectedEmergencyType = "ALL";
+            input.setText("I need all emergency units. ");
+            input.setSelection(input.getText().length());
+        });
 
         sendBtn.setOnClickListener(v -> {
             String text = input.getText().toString().trim();
@@ -72,6 +142,15 @@ public class MainActivity extends AppCompatActivity {
                 startSpeechRecognizer();
             } else {
                 requestAudioPermission();
+            }
+        });
+
+        // Scroll to bottom when keyboard opens and user focuses input
+        input.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus && chatAdapter.getItemCount() > 0) {
+                chatRecyclerView.postDelayed(() -> {
+                    chatRecyclerView.smoothScrollToPosition(chatAdapter.getItemCount() - 1);
+                }, 300); // Delay to wait for keyboard animation
             }
         });
     }
@@ -110,14 +189,37 @@ public class MainActivity extends AppCompatActivity {
 
     private void sendToGemini(String text) {
         sendBtn.setEnabled(false);
+        String userMessage = text;
         input.setText(""); // Clear input after sending
-        appendResponse("🚨 You: " + text + "\n");
-        geminiClient.sendMessage(text, new GeminiClient.ResultCallback() {
+        selectedEmergencyType = ""; // Reset selection
+        
+        // Add user message to chat
+        chatAdapter.addMessage(new ChatMessage(userMessage, true));
+        chatRecyclerView.smoothScrollToPosition(chatAdapter.getItemCount() - 1);
+        
+        // Enhanced prompt for emergency analysis
+        String enhancedPrompt = "You are an emergency response AI assistant. Analyze this emergency report and respond with:\n\n" +
+                "1. **EMERGENCY TYPE(S)**: Identify which emergency services are needed (Police 🚔, Medical 🚑, Fire 🚒, or multiple)\n" +
+                "2. **URGENCY LEVEL**: Critical/High/Medium/Low\n" +
+                "3. **KEY DETAILS**: Important information from the report\n" +
+                "4. **RECOMMENDED ACTIONS**: Immediate steps the person should take\n\n" +
+                "If you need more information to better assess the emergency, ask ONE follow-up question and provide 3-4 quick response options.\n" +
+                "Format quick responses as: [QUICK_RESPONSES: option1 | option2 | option3 | option4]\n" +
+                "Example: [QUICK_RESPONSES: 1 person | 2-3 people | 4+ people | Unknown]\n\n" +
+                "Emergency Report: " + userMessage + "\n\n" +
+                "Use markdown formatting (bold, lists, etc.) for clarity. Respond in a clear, concise format.";
+        
+        geminiClient.sendMessage(enhancedPrompt, new GeminiClient.ResultCallback() {
             @Override
             public void onSuccess(String reply) {
                 runOnUiThread(() -> {
                     Log.i(TAG, "Gemini success: " + reply);
-                    appendResponse("🤖 Gemini AI:\n" + reply + "\n");
+                    
+                    // Add AI response to chat
+                    chatAdapter.addMessage(new ChatMessage(reply, false));
+                    chatRecyclerView.smoothScrollToPosition(chatAdapter.getItemCount() - 1);
+                    
+                    parseAndShowQuickResponses(reply);
                     sendBtn.setEnabled(true);
                 });
             }
@@ -126,21 +228,80 @@ public class MainActivity extends AppCompatActivity {
             public void onFailure(String error) {
                 runOnUiThread(() -> {
                     Log.e(TAG, "Gemini error: " + error);
-                    appendResponse("❌ Error:\n" + error + "\n");
+                    
+                    // Add error message to chat
+                    chatAdapter.addMessage(new ChatMessage("❌ **Error**: " + error, false));
+                    chatRecyclerView.smoothScrollToPosition(chatAdapter.getItemCount() - 1);
+                    
                     sendBtn.setEnabled(true);
                 });
             }
         });
     }
 
-    private void appendResponse(String text) {
-        responseView.append(text + "\n");
-        // keep scroll at bottom
-        final int scrollAmount = responseView.getLayout().getLineTop(responseView.getLineCount()) - responseView.getHeight();
-        if (scrollAmount > 0)
-            responseView.scrollTo(0, scrollAmount);
-        else
-            responseView.scrollTo(0, 0);
+    private void parseAndShowQuickResponses(String aiResponse) {
+        try {
+            // Check if response contains quick response suggestions in format:
+            // [QUICK_RESPONSES: option1 | option2 | option3]
+            if (aiResponse.contains("[QUICK_RESPONSES:")) {
+                int startIndex = aiResponse.indexOf("[QUICK_RESPONSES:") + 17;
+                int endIndex = aiResponse.indexOf("]", startIndex);
+                
+                if (endIndex > startIndex) {
+                    String responsesStr = aiResponse.substring(startIndex, endIndex).trim();
+                    String[] responses = responsesStr.split("\\|");
+                    
+                    if (responses.length > 0) {
+                        showQuickResponseButtons(responses);
+                        inFollowUpMode = true;
+                        return;
+                    }
+                }
+            }
+            
+            // If no quick responses found, hide the buttons
+            hideQuickResponseButtons();
+            inFollowUpMode = false;
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing quick responses", e);
+            hideQuickResponseButtons();
+        }
+    }
+
+    private void showQuickResponseButtons(String[] responses) {
+        quickResponseButtons.removeAllViews();
+        
+        for (String response : responses) {
+            String trimmedResponse = response.trim();
+            
+            MaterialButton button = new MaterialButton(this);
+            button.setText(trimmedResponse);
+            button.setTextSize(14);
+            
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            params.setMargins(8, 0, 8, 0);
+            button.setLayoutParams(params);
+            
+            button.setOnClickListener(v -> {
+                // Send the button's text as user response
+                input.setText(trimmedResponse);
+                sendToGemini(trimmedResponse);
+                hideQuickResponseButtons();
+            });
+            
+            quickResponseButtons.addView(button);
+        }
+        
+        quickResponseScroll.setVisibility(View.VISIBLE);
+    }
+
+    private void hideQuickResponseButtons() {
+        quickResponseScroll.setVisibility(View.GONE);
+        quickResponseButtons.removeAllViews();
     }
 
     @Override
