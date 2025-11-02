@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    
+    <!-- Background circle -->
+    <path
+        android:fillColor="#FF5252"
+        android:pathData="M60,60m-55,0a55,55 0,1 1,110 0a55,55 0,1 1,-110 0"/>
+    
+    <!-- Emergency phone icon -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 45,35 L 75,35 L 75,45 L 70,45 L 70,75 L 50,75 L 50,45 L 45,45 Z"/>
+    
+    <!-- Phone base -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 47,77 L 73,77 L 73,85 L 47,85 Z"/>
+    
+    <!-- Exclamation mark (emergency symbol) -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M 57,45 L 63,45 L 62,60 L 58,60 Z"/>
+    
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M 58,63 L 62,63 L 62,67 L 58,67 Z"/>
+</vector>
