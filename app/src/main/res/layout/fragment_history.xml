@@ -3,14 +3,15 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#F5F5F5">
+    android:background="#EEEEEE">
 
     <!-- RecyclerView for history items -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerViewHistory"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="8dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp"
         android:clipToPadding="false" />
 
     <!-- Empty State -->
@@ -36,7 +37,7 @@
             android:text="No Emergency History"
             android:textSize="18sp"
             android:textStyle="bold"
-            android:textColor="#333333"
+            android:textColor="#757575"
             android:layout_marginBottom="8dp" />
 
         <TextView
@@ -44,7 +45,7 @@
             android:layout_height="wrap_content"
             android:text="Your past emergency reports will appear here"
             android:textSize="14sp"
-            android:textColor="#999999"
+            android:textColor="#BDBDBD"
             android:gravity="center" />
 
     </LinearLayout>
