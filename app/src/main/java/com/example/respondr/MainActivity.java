@@ -1,5 +1,6 @@
 package com.example.respondr;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.MenuItem;
 import android.widget.ImageButton;
@@ -41,16 +42,22 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
     }
 
-    @Override
+        @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-        int itemId = item.getItemId();
-        if (itemId == R.id.nav_chat) {
-            switchToFragment(new ChatFragment(), getString(R.string.menu_chat));
-        } else if (itemId == R.id.nav_history) {
-            switchToFragment(new HistoryFragment(), getString(R.string.menu_history));
-        } else if (itemId == R.id.nav_settings) {
-            toolbarTitle.setText(R.string.menu_settings);
+        int id = item.getItemId();
+
+        if (id == R.id.nav_chat) {
+            switchToFragment(new ChatFragment(), "Chat");
+        } else if (id == R.id.nav_history) {
+            switchToFragment(new HistoryFragment(), "History");
+        } else if (id == R.id.nav_test_report) {
+            // Open Test Report Activity
+            Intent intent = new Intent(this, TestReportActivity.class);
+            startActivity(intent);
+        } else if (id == R.id.nav_settings) {
+            // TODO: Implement Settings
         }
+
         drawerLayout.closeDrawer(GravityCompat.START);
         return true;
     }

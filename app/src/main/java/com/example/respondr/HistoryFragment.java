@@ -21,6 +21,7 @@ public class HistoryFragment extends Fragment {
     private LinearLayout emptyState;
     private HistoryAdapter adapter;
     private List<HistoryItem> historyItems;
+    private FirebaseReportManager firebaseReportManager;
 
     @Nullable
     @Override
@@ -30,6 +31,9 @@ public class HistoryFragment extends Fragment {
         // Initialize views
         recyclerViewHistory = view.findViewById(R.id.recyclerViewHistory);
         emptyState = view.findViewById(R.id.emptyState);
+
+        // Initialize FirebaseReportManager
+        firebaseReportManager = new FirebaseReportManager();
 
         // Setup RecyclerView
         historyItems = new ArrayList<>();
@@ -44,32 +48,31 @@ public class HistoryFragment extends Fragment {
     }
 
     private void loadHistory() {
-        // Sample data - replace with Firebase later
-        historyItems.add(new HistoryItem(
-                "Medical Emergency",
-                "2 hours ago",
-                "14.5995° N, 120.9842° E",
-                "Patient experiencing chest pain and difficulty breathing",
-                "Sent"
-        ));
+        // Load from Firebase
+        firebaseReportManager.loadReports(new FirebaseReportManager.ReportsCallback() {
+            @Override
+            public void onSuccess(List<FirebaseReportManager.EmergencyReport> reports) {
+                if (!isAdded()) return;
+                
+                requireActivity().runOnUiThread(() -> {
+                    historyItems.clear();
+                    historyItems.addAll(firebaseReportManager.convertToHistoryItems(reports));
+                    updateUI();
+                });
+            }
 
-        historyItems.add(new HistoryItem(
-                "Fire Emergency",
-                "Yesterday",
-                "14.6042° N, 121.0017° E",
-                "Small fire in residential building, residents evacuated",
-                "Resolved"
-        ));
-
-        historyItems.add(new HistoryItem(
-                "Police Emergency",
-                "3 days ago",
-                "14.5547° N, 121.0244° E",
-                "Two-vehicle collision, minor injuries reported",
-                "Resolved"
-        ));
-
-        updateUI();
+            @Override
+            public void onError(String error) {
+                if (!isAdded()) return;
+                
+                requireActivity().runOnUiThread(() -> {
+                    android.widget.Toast.makeText(requireContext(), 
+                        "Error loading history: " + error, 
+                        android.widget.Toast.LENGTH_SHORT).show();
+                    updateUI();
+                });
+            }
+        });
     }
 
     private void updateUI() {
@@ -81,5 +84,12 @@ public class HistoryFragment extends Fragment {
             recyclerViewHistory.setVisibility(View.VISIBLE);
             adapter.notifyDataSetChanged();
         }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Refresh history when fragment becomes visible
+        loadHistory();
     }
 }

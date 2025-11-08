@@ -51,8 +51,12 @@ public class ChatFragment extends Fragment {
     private ChatAdapter chatAdapter;
     private Markwon markwon;
     private GeminiClient geminiClient;
+    private FirebaseReportManager firebaseReportManager;
 
     private String selectedEmergencyType = "";
+    private String currentUserMessage = "";
+    private StringBuilder conversationHistory = new StringBuilder();
+    private boolean isFirstMessage = true;
 
     @Nullable
     @Override
@@ -79,6 +83,7 @@ public class ChatFragment extends Fragment {
         chatRecyclerView.setAdapter(chatAdapter);
 
         geminiClient = new GeminiClient(requireContext());
+        firebaseReportManager = new FirebaseReportManager();
 
         showWelcomeMessage();
         setupEmergencyButtons();
@@ -95,10 +100,27 @@ public class ChatFragment extends Fragment {
     }
 
     private void setupEmergencyButtons() {
-        policeBtn.setOnClickListener(v -> prefillEmergency("POLICE", "I need police assistance. "));
-        medicBtn.setOnClickListener(v -> prefillEmergency("MEDICAL", "I need medical assistance. "));
-        fireBtn.setOnClickListener(v -> prefillEmergency("FIRE", "There's a fire emergency. "));
-        allBtn.setOnClickListener(v -> prefillEmergency("ALL", "Emergency! I need all emergency services. "));
+        policeBtn.setOnClickListener(v -> {
+            resetConversation();
+            prefillEmergency("POLICE", "I need police assistance. ");
+        });
+        medicBtn.setOnClickListener(v -> {
+            resetConversation();
+            prefillEmergency("MEDICAL", "I need medical assistance. ");
+        });
+        fireBtn.setOnClickListener(v -> {
+            resetConversation();
+            prefillEmergency("FIRE", "There's a fire emergency. ");
+        });
+        allBtn.setOnClickListener(v -> {
+            resetConversation();
+            prefillEmergency("ALL", "Emergency! I need all emergency services. ");
+        });
+    }
+
+    private void resetConversation() {
+        conversationHistory = new StringBuilder();
+        isFirstMessage = true;
     }
 
     private void prefillEmergency(String type, String message) {
@@ -131,7 +153,14 @@ public class ChatFragment extends Fragment {
         chatAdapter.addMessage(new ChatMessage(userMessage, true));
         chatRecyclerView.smoothScrollToPosition(chatAdapter.getItemCount() - 1);
 
+        // Add to conversation history
+        conversationHistory.append("User: ").append(userMessage).append("\n");
+        
+        currentUserMessage = userMessage;
+        String emergencyTypeForReport = selectedEmergencyType.isEmpty() ? "General Emergency" : selectedEmergencyType + " Emergency";
+        
         input.setText("");
+        String tempSelectedType = selectedEmergencyType;
         selectedEmergencyType = "";
         toggleSendingState(true);
 
@@ -145,10 +174,21 @@ public class ChatFragment extends Fragment {
                 }
                 requireActivity().runOnUiThread(() -> {
                     Log.i(TAG, "Gemini success: " + reply);
+                    
+                    // Add AI response to conversation history
+                    conversationHistory.append("Assistant: ").append(reply).append("\n\n");
+                    
                     chatAdapter.addMessage(new ChatMessage(reply, false));
                     chatRecyclerView.smoothScrollToPosition(chatAdapter.getItemCount() - 1);
                     parseAndShowQuickResponses(reply);
                     toggleSendingState(false);
+                    
+                    // Only save report after conversation seems complete (no follow-up questions)
+                    if (!reply.contains("[QUICK_RESPONSES:") && !isFirstMessage) {
+                        saveEmergencyReport(emergencyTypeForReport, conversationHistory.toString(), reply);
+                    }
+                    
+                    isFirstMessage = false;
                 });
             }
 
@@ -169,21 +209,42 @@ public class ChatFragment extends Fragment {
 
     private String buildEnhancedPrompt(String userMessage) {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("You are an emergency response AI assistant. Analyze this emergency report and respond with:\n\n")
-                .append("1. **EMERGENCY TYPE(S)**: Identify which emergency services are needed (Police 🚔, Medical 🚑, Fire 🚒, or multiple)\n")
-                .append("2. **URGENCY LEVEL**: Critical/High/Medium/Low\n")
-                .append("3. **KEY DETAILS**: Important information from the report\n")
-                .append("4. **RECOMMENDED ACTIONS**: Immediate steps the person should take\n\n")
-                .append("If you need more information to better assess the emergency, ask ONE follow-up question and provide 3-4 quick response options.\n")
-                .append("Format quick responses as: [QUICK_RESPONSES: option1 | option2 | option3 | option4]\n")
-                .append("Example: [QUICK_RESPONSES: 1 person | 2-3 people | 4+ people | Unknown]\n\n");
-
-        if (!TextUtils.isEmpty(selectedEmergencyType)) {
-            prompt.append("Selected emergency type: ").append(selectedEmergencyType).append('\n');
+        
+        // If this is not the first message, include conversation context
+        if (!isFirstMessage && conversationHistory.length() > 0) {
+            prompt.append("Previous conversation context:\n")
+                    .append(conversationHistory.toString())
+                    .append("\n---\n\n");
         }
+        
+        prompt.append("You are an emergency response AI assistant. ");
+        
+        if (isFirstMessage) {
+            prompt.append("Analyze this emergency report and respond with:\n\n")
+                    .append("1. **EMERGENCY TYPE(S)**: Identify which emergency services are needed (Police 🚔, Medical 🚑, Fire 🚒, or multiple)\n")
+                    .append("2. **URGENCY LEVEL**: Critical/High/Medium/Low\n")
+                    .append("3. **KEY DETAILS**: Important information from the report\n")
+                    .append("4. **RECOMMENDED ACTIONS**: Immediate steps the person should take\n\n")
+                    .append("If you need more information to better assess the emergency, ask ONE follow-up question and provide 3-4 quick response options.\n")
+                    .append("Format quick responses as: [QUICK_RESPONSES: option1 | option2 | option3 | option4]\n")
+                    .append("Example: [QUICK_RESPONSES: 1 person | 2-3 people | 4+ people | Unknown]\n\n");
 
-        prompt.append("Emergency Report: ").append(userMessage).append("\n\n")
-                .append("Use markdown formatting (bold, lists, etc.) for clarity. Respond in a clear, concise format.");
+            if (!TextUtils.isEmpty(selectedEmergencyType)) {
+                prompt.append("Selected emergency type: ").append(selectedEmergencyType).append('\n');
+            }
+
+            prompt.append("Emergency Report: ").append(userMessage).append("\n\n")
+                    .append("Use markdown formatting (bold, lists, etc.) for clarity. Respond in a clear, concise format.");
+        } else {
+            // For follow-up messages, maintain context
+            prompt.append("The user is providing additional details about the ongoing emergency situation. ")
+                    .append("Continue the conversation naturally, asking clarifying questions if needed, or provide final assessment and recommendations.\n\n")
+                    .append("If you need more information, ask ONE follow-up question with 3-4 quick response options.\n")
+                    .append("Format quick responses as: [QUICK_RESPONSES: option1 | option2 | option3 | option4]\n\n")
+                    .append("User's response: ").append(userMessage).append("\n\n")
+                    .append("Use markdown formatting (bold, lists, etc.) for clarity.");
+        }
+        
         return prompt.toString();
     }
 
@@ -294,5 +355,39 @@ public class ChatFragment extends Fragment {
                 Toast.makeText(requireContext(), "Audio permission required for speech", Toast.LENGTH_SHORT).show();
             }
         }
+    }
+
+    private void saveEmergencyReport(String emergencyType, String description, String aiResponse) {
+        // Mock location data - in production, get actual GPS coordinates
+        String latitude = "14.5995";
+        String longitude = "120.9842";
+        String location = latitude + "° N, " + longitude + "° E";
+        
+        FirebaseReportManager.EmergencyReport report = new FirebaseReportManager.EmergencyReport(
+            emergencyType,
+            description,
+            location,
+            latitude,
+            longitude,
+            aiResponse
+        );
+        
+        firebaseReportManager.saveReport(report, new FirebaseReportManager.SaveCallback() {
+            @Override
+            public void onSuccess() {
+                Log.d(TAG, "Emergency report saved to Firebase: " + emergencyType);
+                if (isAdded()) {
+                    Toast.makeText(requireContext(), "✓ Report saved", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                Log.e(TAG, "Failed to save report to Firebase: " + error);
+                if (isAdded()) {
+                    Toast.makeText(requireContext(), "Failed to save report", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
     }
 }
