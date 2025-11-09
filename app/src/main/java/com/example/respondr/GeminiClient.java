@@ -26,8 +26,9 @@ import okhttp3.Response;
  */
 public class GeminiClient {
 
-    // Google AI Studio (Gemini) endpoint - using gemini-2.0-flash-exp (latest free model)
-    private static final String MODEL_NAME = "gemini-2.0-flash-exp";
+    // Google AI Studio (Gemini) endpoint - using Gemini 1.5 Pro (best available model)
+    // With Google AI Pro subscription, you get access to Gemini 1.5 Pro with higher rate limits
+    private static final String MODEL_NAME = "gemini-2.5-flash";
     private static final String GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL_NAME + ":generateContent";
 
     // API key is now loaded from BuildConfig (stored in local.properties, not committed to Git)
