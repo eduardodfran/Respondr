@@ -26,6 +26,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.ArrayList;
 
@@ -38,8 +39,8 @@ public class ChatFragment extends Fragment {
     private static final int REQ_PERMISSIONS = 2001;
 
     private EditText input;
-    private Button sendBtn;
-    private ImageButton speakBtn;
+    private FloatingActionButton sendBtn;
+    private FloatingActionButton speakBtn;
     private RecyclerView chatRecyclerView;
     private LinearLayout quickResponseButtons;
     private HorizontalScrollView quickResponseScroll;
@@ -57,6 +58,7 @@ public class ChatFragment extends Fragment {
     private String currentUserMessage = "";
     private StringBuilder conversationHistory = new StringBuilder();
     private boolean isFirstMessage = true;
+    private String currentReportId = null; // Track the current report ID to update instead of creating duplicates
 
     @Nullable
     @Override
@@ -121,6 +123,7 @@ public class ChatFragment extends Fragment {
     private void resetConversation() {
         conversationHistory = new StringBuilder();
         isFirstMessage = true;
+        currentReportId = null; // Reset report ID for new conversation
     }
 
     private void prefillEmergency(String type, String message) {
@@ -183,10 +186,8 @@ public class ChatFragment extends Fragment {
                     parseAndShowQuickResponses(reply);
                     toggleSendingState(false);
                     
-                    // Only save report after conversation seems complete (no follow-up questions)
-                    if (!reply.contains("[QUICK_RESPONSES:") && !isFirstMessage) {
-                        saveEmergencyReport(emergencyTypeForReport, conversationHistory.toString(), reply);
-                    }
+                    // Save or update report after each message
+                    saveOrUpdateEmergencyReport(emergencyTypeForReport, conversationHistory.toString(), reply);
                     
                     isFirstMessage = false;
                 });
@@ -217,32 +218,36 @@ public class ChatFragment extends Fragment {
                     .append("\n---\n\n");
         }
         
-        prompt.append("You are an emergency response AI assistant. ");
+        prompt.append("You are a professional emergency dispatcher with 10+ years of experience. ")
+                .append("Your role is to quickly assess emergencies, provide life-saving instructions, and dispatch appropriate help. ")
+                .append("Be calm, direct, and efficient. Get critical information fast.\n\n")
+                .append("IMPORTANT: If the caller hasn't mentioned their exact location/address, you MUST ask for it. ")
+                .append("Say something like: 'What is your exact location?' or 'Can you tell me the address?'\n\n");
         
         if (isFirstMessage) {
-            prompt.append("Analyze this emergency report and respond with:\n\n")
-                    .append("1. **EMERGENCY TYPE(S)**: Identify which emergency services are needed (Police 🚔, Medical 🚑, Fire 🚒, or multiple)\n")
-                    .append("2. **URGENCY LEVEL**: Critical/High/Medium/Low\n")
-                    .append("3. **KEY DETAILS**: Important information from the report\n")
-                    .append("4. **RECOMMENDED ACTIONS**: Immediate steps the person should take\n\n")
-                    .append("If you need more information to better assess the emergency, ask ONE follow-up question and provide 3-4 quick response options.\n")
-                    .append("Format quick responses as: [QUICK_RESPONSES: option1 | option2 | option3 | option4]\n")
-                    .append("Example: [QUICK_RESPONSES: 1 person | 2-3 people | 4+ people | Unknown]\n\n");
+            prompt.append("**Initial Assessment Protocol:**\n\n")
+                    .append("1. **EMERGENCY TYPE**: Identify services needed (Police 🚔, Medical 🚑, Fire 🚒, or multiple)\n")
+                    .append("2. **URGENCY**: Critical/High/Medium - be decisive\n")
+                    .append("3. **IMMEDIATE ACTION**: Tell them what to do RIGHT NOW (e.g., 'Apply pressure to the wound', 'Get everyone out of the building')\n")
+                    .append("4. **DISPATCH STATUS**: Confirm help is being sent\n\n")
+                    .append("Keep your response SHORT and ACTION-ORIENTED. Ask for critical missing information ONLY if absolutely necessary (e.g., 'Is the person breathing?', 'Are you in a safe location?').\n\n")
+                    .append("If you must ask follow-ups, limit to ONE critical question with 2-3 quick options.\n")
+                    .append("Format: [QUICK_RESPONSES: option1 | option2 | option3]\n\n");
 
             if (!TextUtils.isEmpty(selectedEmergencyType)) {
-                prompt.append("Selected emergency type: ").append(selectedEmergencyType).append('\n');
+                prompt.append("Emergency type indicated: ").append(selectedEmergencyType).append('\n');
             }
 
-            prompt.append("Emergency Report: ").append(userMessage).append("\n\n")
-                    .append("Use markdown formatting (bold, lists, etc.) for clarity. Respond in a clear, concise format.");
+            prompt.append("Caller's report: ").append(userMessage).append("\n\n")
+                    .append("Respond like a real dispatcher: calm, confident, brief. Use markdown for clarity.");
         } else {
-            // For follow-up messages, maintain context
-            prompt.append("The user is providing additional details about the ongoing emergency situation. ")
-                    .append("Continue the conversation naturally, asking clarifying questions if needed, or provide final assessment and recommendations.\n\n")
-                    .append("If you need more information, ask ONE follow-up question with 3-4 quick response options.\n")
-                    .append("Format quick responses as: [QUICK_RESPONSES: option1 | option2 | option3 | option4]\n\n")
-                    .append("User's response: ").append(userMessage).append("\n\n")
-                    .append("Use markdown formatting (bold, lists, etc.) for clarity.");
+            // For follow-up messages - wrap up quickly
+            prompt.append("Continue as the dispatcher. The caller is providing more information.\n\n")
+                    .append("If you have enough info, provide FINAL INSTRUCTIONS and confirm dispatch. ")
+                    .append("Do NOT ask unnecessary questions. ")
+                    .append("Only ask ONE more critical question if vital information is missing.\n\n")
+                    .append("Caller's response: ").append(userMessage).append("\n\n")
+                    .append("Stay brief and action-focused. Close the call when you have what you need.");
         }
         
         return prompt.toString();
@@ -357,37 +362,175 @@ public class ChatFragment extends Fragment {
         }
     }
 
-    private void saveEmergencyReport(String emergencyType, String description, String aiResponse) {
+    private void saveOrUpdateEmergencyReport(String emergencyType, String description, String aiResponse) {
+        // Extract address from conversation
+        String extractedAddress = extractAddressFromConversation(description);
+        String addressStatus = extractedAddress.isEmpty() ? "not_provided" : "provided";
+        
+        // Log extraction results for debugging
+        Log.d(TAG, "Address extraction - Input: " + description);
+        Log.d(TAG, "Address extraction - Result: " + extractedAddress);
+        Log.d(TAG, "Address extraction - Status: " + addressStatus);
+        
         // Mock location data - in production, get actual GPS coordinates
         String latitude = "14.5995";
         String longitude = "120.9842";
-        String location = latitude + "° N, " + longitude + "° E";
+        String location = extractedAddress.isEmpty() 
+            ? latitude + "° N, " + longitude + "° E (GPS only - no address provided)"
+            : extractedAddress + " (" + latitude + "° N, " + longitude + "° E)";
         
-        FirebaseReportManager.EmergencyReport report = new FirebaseReportManager.EmergencyReport(
-            emergencyType,
-            description,
-            location,
-            latitude,
-            longitude,
-            aiResponse
-        );
-        
-        firebaseReportManager.saveReport(report, new FirebaseReportManager.SaveCallback() {
-            @Override
-            public void onSuccess() {
-                Log.d(TAG, "Emergency report saved to Firebase: " + emergencyType);
-                if (isAdded()) {
-                    Toast.makeText(requireContext(), "✓ Report saved", Toast.LENGTH_SHORT).show();
+        if (currentReportId == null) {
+            // First save - create new report
+            FirebaseReportManager.EmergencyReport report = new FirebaseReportManager.EmergencyReport(
+                emergencyType,
+                description,
+                location,
+                latitude,
+                longitude,
+                extractedAddress.isEmpty() ? "Not provided" : extractedAddress,
+                addressStatus,
+                aiResponse
+            );
+            
+            Log.d(TAG, "Creating new report with address: " + report.address + ", status: " + report.addressStatus);
+            
+            firebaseReportManager.saveReport(report, new FirebaseReportManager.SaveCallback() {
+                @Override
+                public void onSuccess() {
+                    currentReportId = report.id; // Store the report ID for future updates
+                    Log.d(TAG, "Emergency report created in Firebase: " + emergencyType + " with ID: " + currentReportId);
+                    if (isAdded()) {
+                        Toast.makeText(requireContext(), "✓ Report saved", Toast.LENGTH_SHORT).show();
+                    }
                 }
-            }
 
-            @Override
-            public void onError(String error) {
-                Log.e(TAG, "Failed to save report to Firebase: " + error);
-                if (isAdded()) {
-                    Toast.makeText(requireContext(), "Failed to save report", Toast.LENGTH_SHORT).show();
+                @Override
+                public void onError(String error) {
+                    Log.e(TAG, "Failed to save report to Firebase: " + error);
+                    if (isAdded()) {
+                        Toast.makeText(requireContext(), "Failed to save report", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+        } else {
+            // Update existing report
+            Log.d(TAG, "Updating report " + currentReportId + " with address: " + extractedAddress + ", status: " + addressStatus);
+            
+            firebaseReportManager.updateReport(currentReportId, description, extractedAddress, 
+                    addressStatus, location, aiResponse, new FirebaseReportManager.SaveCallback() {
+                @Override
+                public void onSuccess() {
+                    Log.d(TAG, "Emergency report updated in Firebase: " + currentReportId);
+                    if (isAdded()) {
+                        Toast.makeText(requireContext(), "✓ Report updated", Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public void onError(String error) {
+                    Log.e(TAG, "Failed to update report: " + error);
+                    if (isAdded()) {
+                        Toast.makeText(requireContext(), "Failed to update report", Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+        }
+    }
+
+    private void saveEmergencyReport(String emergencyType, String description, String aiResponse) {
+        // Deprecated - now using saveOrUpdateEmergencyReport
+        saveOrUpdateEmergencyReport(emergencyType, description, aiResponse);
+    }
+
+    private String extractAddressFromConversation(String conversation) {
+        // Simple address extraction - looks for common address patterns
+        String lowerConv = conversation.toLowerCase();
+        
+        Log.d(TAG, "Extracting address from: " + conversation);
+        
+        // Check for explicit address mentions with colon
+        if (lowerConv.contains("address:")) {
+            int startIdx = lowerConv.indexOf("address:") + 8;
+            String remaining = conversation.substring(startIdx);
+            String address = remaining.split("[\\n.!?]")[0].trim();
+            Log.d(TAG, "Found 'address:' pattern - extracted: " + address);
+            if (address.length() > 3 && address.length() < 200) {
+                return address;
+            }
+        }
+        
+        if (lowerConv.contains("location:")) {
+            int startIdx = lowerConv.indexOf("location:") + 9;
+            String remaining = conversation.substring(startIdx);
+            String address = remaining.split("[\\n.!?]")[0].trim();
+            Log.d(TAG, "Found 'location:' pattern - extracted: " + address);
+            if (address.length() > 3 && address.length() < 200) {
+                return address;
+            }
+        }
+        
+        // Check for "I'm at [location]" or "at [location]" patterns
+        if (lowerConv.contains(" at ")) {
+            String[] parts = conversation.split("(?i) at ", 2);
+            if (parts.length > 1) {
+                // Get the part after "at" and clean it up
+                String possibleAddress = parts[1].split("[.!?\\n]")[0].trim();
+                // Remove common phrases after the address
+                possibleAddress = possibleAddress.split("(?i),? (and |with |please |help )")[0].trim();
+                Log.d(TAG, "Found 'at' pattern - extracted: " + possibleAddress);
+                if (possibleAddress.length() > 5 && possibleAddress.length() < 200) {
+                    return possibleAddress;
                 }
             }
-        });
+        }
+        
+        // Look for "I'm in [location]" or "in [location]" patterns
+        if (lowerConv.contains(" in ")) {
+            String[] parts = conversation.split("(?i) in ", 2);
+            if (parts.length > 1) {
+                String possibleAddress = parts[1].split("[.!?\\n]")[0].trim();
+                possibleAddress = possibleAddress.split("(?i),? (and |with |please |help )")[0].trim();
+                Log.d(TAG, "Found 'in' pattern - extracted: " + possibleAddress);
+                if (possibleAddress.length() > 5 && possibleAddress.length() < 200 && 
+                    !possibleAddress.toLowerCase().matches("(trouble|danger|need|pain).*")) {
+                    return possibleAddress;
+                }
+            }
+        }
+        
+        // Look for "near [landmark]" pattern
+        if (lowerConv.contains(" near ")) {
+            String[] parts = conversation.split("(?i) near ", 2);
+            if (parts.length > 1) {
+                String possibleAddress = parts[1].split("[.!?\\n]")[0].trim();
+                Log.d(TAG, "Found 'near' pattern - extracted: " + possibleAddress);
+                if (possibleAddress.length() > 3 && possibleAddress.length() < 200) {
+                    return "Near " + possibleAddress;
+                }
+            }
+        }
+        
+        // Look for street/building patterns (e.g., "123 Main Street", "Building A")
+        if (lowerConv.matches(".*(\\d+\\s+[a-z]+\\s+(street|st|avenue|ave|road|rd|drive|dr|boulevard|blvd)).*")) {
+            String[] words = conversation.split("\\s+");
+            StringBuilder address = new StringBuilder();
+            boolean foundNumber = false;
+            for (int i = 0; i < words.length; i++) {
+                if (words[i].matches("\\d+")) {
+                    foundNumber = true;
+                    address.append(words[i]).append(" ");
+                } else if (foundNumber) {
+                    address.append(words[i]).append(" ");
+                    if (words[i].toLowerCase().matches(".*(street|st|avenue|ave|road|rd|drive|dr|boulevard|blvd).*")) {
+                        String extractedStreet = address.toString().trim();
+                        Log.d(TAG, "Found street pattern - extracted: " + extractedStreet);
+                        return extractedStreet;
+                    }
+                }
+            }
+        }
+        
+        Log.d(TAG, "No address pattern matched - returning empty");
+        return ""; // No address found
     }
 }

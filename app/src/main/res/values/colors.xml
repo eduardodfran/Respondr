@@ -2,4 +2,14 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    
+    <!-- Design System 2.0 Colors -->
+    <color name="background_main">#F2F4F7</color>
+    <color name="surface_white">#FFFFFF</color>
+    <color name="text_primary">#111827</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="accent_red">#FF3B30</color>
+    <color name="accent_red_alpha">#4DFF3B30</color>
+    <color name="input_background">#F2F4F7</color>
+    <color name="shadow_light">#0D000000</color>
 </resources>

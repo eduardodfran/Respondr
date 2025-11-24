@@ -31,6 +31,8 @@ public class FirebaseReportManager {
         public String location;
         public String latitude;
         public String longitude;
+        public String address; // User-provided address from conversation
+        public String addressStatus; // "provided", "not_provided", "gps_only"
         public String timestamp;
         public String status;
         public String aiResponse;
@@ -40,13 +42,16 @@ public class FirebaseReportManager {
         }
 
         public EmergencyReport(String emergencyType, String description, String location,
-                               String latitude, String longitude, String aiResponse) {
+                               String latitude, String longitude, String address, 
+                               String addressStatus, String aiResponse) {
             this.id = String.valueOf(System.currentTimeMillis());
             this.emergencyType = emergencyType;
             this.description = description;
             this.location = location;
             this.latitude = latitude;
             this.longitude = longitude;
+            this.address = address;
+            this.addressStatus = addressStatus;
             this.timestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
             this.status = "Sent";
             this.aiResponse = aiResponse;
@@ -60,6 +65,8 @@ public class FirebaseReportManager {
             result.put("location", location);
             result.put("latitude", latitude);
             result.put("longitude", longitude);
+            result.put("address", address != null ? address : "Not provided");
+            result.put("addressStatus", addressStatus != null ? addressStatus : "not_provided");
             result.put("timestamp", timestamp);
             result.put("status", status);
             result.put("aiResponse", aiResponse);
@@ -159,6 +166,27 @@ public class FirebaseReportManager {
             .addOnFailureListener(e -> {
                 Log.e(TAG, "Error updating report status", e);
                 callback.onError(e.getMessage());
+            });
+    }
+
+    public void updateReport(String reportId, String description, String address, 
+                            String addressStatus, String location, String aiResponse, SaveCallback callback) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("description", description);
+        updates.put("address", address != null && !address.isEmpty() ? address : "Not provided");
+        updates.put("addressStatus", addressStatus != null ? addressStatus : "not_provided");
+        updates.put("location", location);
+        updates.put("aiResponse", aiResponse);
+        updates.put("timestamp", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date()));
+        
+        databaseReference.child(reportId).updateChildren(updates)
+            .addOnSuccessListener(aVoid -> {
+                Log.d(TAG, "Report updated successfully: " + reportId);
+                callback.onSuccess();
+            })
+            .addOnFailureListener(e -> {
+                Log.e(TAG, "Error updating report", e);
+                callback.onError(e.getMessage() != null ? e.getMessage() : "Unknown error");
             });
     }
 

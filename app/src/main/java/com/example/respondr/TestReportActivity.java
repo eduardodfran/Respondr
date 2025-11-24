@@ -84,7 +84,9 @@ public class TestReportActivity extends AppCompatActivity {
         // Mock location data
         String latitude = "14.5995";
         String longitude = "120.9842";
-        String location = latitude + "° N, " + longitude + "° E";
+        String location = latitude + "° N, " + longitude + "° E (Test Report)";
+        String testAddress = "Test Address - Manual Entry";
+        String addressStatus = "provided";
 
         // Create report
         FirebaseReportManager.EmergencyReport report = new FirebaseReportManager.EmergencyReport(
@@ -93,6 +95,8 @@ public class TestReportActivity extends AppCompatActivity {
             location,
             latitude,
             longitude,
+            testAddress,
+            addressStatus,
             aiResponse
         );
 
