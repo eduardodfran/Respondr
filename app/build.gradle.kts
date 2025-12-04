@@ -60,6 +60,9 @@ dependencies {
     implementation("com.google.firebase:firebase-database")
     implementation("com.google.firebase:firebase-analytics")
     
+    // Google Play Services for Location
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    
     // Networking and JSON for Gemini API calls
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")

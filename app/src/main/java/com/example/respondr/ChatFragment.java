@@ -3,6 +3,9 @@ package com.example.respondr;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.Address;
+import android.location.Geocoder;
+import android.location.Location;
 import android.os.Bundle;
 import android.speech.RecognizerIntent;
 import android.text.TextUtils;
@@ -27,6 +30,10 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.Priority;
+import com.google.android.gms.tasks.CancellationTokenSource;
 
 import java.util.ArrayList;
 
@@ -37,6 +44,7 @@ public class ChatFragment extends Fragment {
     private static final String TAG = "ChatFragment";
     private static final int REQ_CODE_SPEECH = 1001;
     private static final int REQ_PERMISSIONS = 2001;
+    private static final int REQ_LOCATION = 3001;
 
     private EditText input;
     private FloatingActionButton sendBtn;
@@ -47,12 +55,14 @@ public class ChatFragment extends Fragment {
     private Button policeBtn;
     private Button medicBtn;
     private Button fireBtn;
-    private Button allBtn;
 
     private ChatAdapter chatAdapter;
     private Markwon markwon;
     private GeminiClient geminiClient;
     private FirebaseReportManager firebaseReportManager;
+    private FusedLocationProviderClient fusedLocationClient;
+    private Location currentLocation = null;
+    private String currentAddress = "";
 
     private String selectedEmergencyType = "";
     private String currentUserMessage = "";
@@ -74,7 +84,6 @@ public class ChatFragment extends Fragment {
         policeBtn = view.findViewById(R.id.policeBtn);
         medicBtn = view.findViewById(R.id.medicBtn);
         fireBtn = view.findViewById(R.id.fireBtn);
-        allBtn = view.findViewById(R.id.allBtn);
 
         LinearLayoutManager layoutManager = new LinearLayoutManager(requireContext());
         layoutManager.setStackFromEnd(true);
@@ -86,10 +95,12 @@ public class ChatFragment extends Fragment {
 
         geminiClient = new GeminiClient(requireContext());
         firebaseReportManager = new FirebaseReportManager();
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
 
         showWelcomeMessage();
         setupEmergencyButtons();
         setupInputActions();
+        requestLocationPermissionAndFetch();
 
         return view;
     }
@@ -113,10 +124,6 @@ public class ChatFragment extends Fragment {
         fireBtn.setOnClickListener(v -> {
             resetConversation();
             prefillEmergency("FIRE", "There's a fire emergency. ");
-        });
-        allBtn.setOnClickListener(v -> {
-            resetConversation();
-            prefillEmergency("ALL", "Emergency! I need all emergency services. ");
         });
     }
 
@@ -220,9 +227,22 @@ public class ChatFragment extends Fragment {
         
         prompt.append("You are a professional emergency dispatcher with 10+ years of experience. ")
                 .append("Your role is to quickly assess emergencies, provide life-saving instructions, and dispatch appropriate help. ")
-                .append("Be calm, direct, and efficient. Get critical information fast.\n\n")
-                .append("IMPORTANT: If the caller hasn't mentioned their exact location/address, you MUST ask for it. ")
-                .append("Say something like: 'What is your exact location?' or 'Can you tell me the address?'\n\n");
+                .append("Be calm, direct, and efficient. Get critical information fast.\n\n");
+        
+        // Add GPS location info if available
+        if (currentLocation != null && !currentAddress.isEmpty()) {
+            prompt.append("**DETECTED LOCATION (GPS):** ").append(currentAddress).append("\n")
+                    .append("**IMPORTANT:** Start your response by confirming this location with the caller. ")
+                    .append("Say: 'I'm showing your location as [address]. Is that correct?' ")
+                    .append("If they say yes, proceed. If no, ask for the correct address.\n\n");
+        } else if (currentLocation != null) {
+            prompt.append("**DETECTED GPS COORDINATES:** ")
+                    .append(String.format("%.6f", currentLocation.getLatitude())).append("° N, ")
+                    .append(String.format("%.6f", currentLocation.getLongitude())).append("° E\n")
+                    .append("**IMPORTANT:** Start by confirming: 'I have your GPS location. Can you tell me the address or landmark you're at?'\n\n");
+        } else {
+            prompt.append("**NO GPS LOCATION DETECTED** - You MUST ask for their exact location/address immediately.\n\n");
+        }
         
         if (isFirstMessage) {
             prompt.append("**Initial Assessment Protocol:**\n\n")
@@ -359,25 +379,263 @@ public class ChatFragment extends Fragment {
             } else if (isAdded()) {
                 Toast.makeText(requireContext(), "Audio permission required for speech", Toast.LENGTH_SHORT).show();
             }
+        } else if (requestCode == REQ_LOCATION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                fetchCurrentLocation();
+            } else if (isAdded()) {
+                Toast.makeText(requireContext(), "Location permission needed for accurate emergency response", Toast.LENGTH_LONG).show();
+            }
         }
     }
 
+    private void requestLocationPermissionAndFetch() {
+        if (ContextCompat.checkSelfPermission(requireContext(), 
+                Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            fetchCurrentLocation();
+        } else {
+            ActivityCompat.requestPermissions(requireActivity(),
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQ_LOCATION);
+        }
+    }
+
+    private void fetchCurrentLocation() {
+        if (ContextCompat.checkSelfPermission(requireContext(), 
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "Location permission not granted");
+            return;
+        }
+        
+        Log.d(TAG, "Fetching current location...");
+        CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+        
+        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, 
+                cancellationTokenSource.getToken())
+                .addOnSuccessListener(location -> {
+                    if (location != null) {
+                        currentLocation = location;
+                        Log.d(TAG, "✓ Location fetched successfully: " + location.getLatitude() + ", " + location.getLongitude());
+                        // Convert coordinates to address
+                        getAddressFromLocation(location);
+                        if (isAdded()) {
+                            Toast.makeText(requireContext(), "📍 Location acquired", Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        Log.w(TAG, "Location is null, trying last known location");
+                        getLastKnownLocation();
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Failed to get location: " + e.getMessage());
+                    getLastKnownLocation();
+                });
+    }
+
+    private void getLastKnownLocation() {
+        if (ContextCompat.checkSelfPermission(requireContext(), 
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "Location permission not granted for last known location");
+            return;
+        }
+        
+        Log.d(TAG, "Trying to get last known location...");
+        fusedLocationClient.getLastLocation()
+                .addOnSuccessListener(location -> {
+                    if (location != null) {
+                        currentLocation = location;
+                        Log.d(TAG, "✓ Last known location: " + location.getLatitude() + ", " + location.getLongitude());
+                        // Convert coordinates to address
+                        getAddressFromLocation(location);
+                        if (isAdded()) {
+                            Toast.makeText(requireContext(), "📍 Using last known location", Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        Log.e(TAG, "❌ No location available - both current and last known are null");
+                        if (isAdded()) {
+                            Toast.makeText(requireContext(), "⚠️ Could not get location - using default", Toast.LENGTH_LONG).show();
+                        }
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Failed to get last known location: " + e.getMessage());
+                });
+    }
+
+    private void getAddressFromLocation(Location location) {
+        if (location == null) {
+            return;
+        }
+        
+        // Run geocoding in background thread
+        new Thread(() -> {
+            try {
+                Geocoder geocoder = new Geocoder(requireContext(), java.util.Locale.getDefault());
+                
+                // Check if geocoder is available on this device
+                if (!Geocoder.isPresent()) {
+                    Log.e(TAG, "Geocoder not available on this device");
+                    currentAddress = "";
+                    return;
+                }
+                
+                java.util.List<Address> addresses = geocoder.getFromLocation(
+                    location.getLatitude(), 
+                    location.getLongitude(), 
+                    1
+                );
+                
+                if (addresses != null && !addresses.isEmpty()) {
+                    Address address = addresses.get(0);
+                    StringBuilder addressText = new StringBuilder();
+                    
+                    Log.d(TAG, "=== Geocoder Debug ===");
+                    Log.d(TAG, "Feature: " + address.getFeatureName());
+                    Log.d(TAG, "SubThoroughfare: " + address.getSubThoroughfare());
+                    Log.d(TAG, "Thoroughfare: " + address.getThoroughfare());
+                    Log.d(TAG, "Locality: " + address.getLocality());
+                    Log.d(TAG, "SubAdminArea: " + address.getSubAdminArea());
+                    Log.d(TAG, "AdminArea: " + address.getAdminArea());
+                    Log.d(TAG, "AddressLine(0): " + address.getAddressLine(0));
+                    Log.d(TAG, "===================");
+                    
+                    // Strategy 1: Use thoroughfare (street) + locality (city)
+                    String street = address.getThoroughfare();
+                    String subStreet = address.getSubThoroughfare();
+                    String locality = address.getLocality();
+                    String subLocality = address.getSubLocality();
+                    String subAdminArea = address.getSubAdminArea();
+                    String adminArea = address.getAdminArea();
+                    
+                    // Build address from most specific to general
+                    boolean hasValidStreet = false;
+                    
+                    // Add street number and name
+                    if (subStreet != null && !subStreet.matches("^[A-Z0-9+]+$")) {
+                        addressText.append(subStreet).append(" ");
+                        hasValidStreet = true;
+                    }
+                    if (street != null && !street.matches("^[A-Z0-9+]+$")) {
+                        addressText.append(street);
+                        hasValidStreet = true;
+                    }
+                    
+                    // Add separator if we have street
+                    if (hasValidStreet && addressText.length() > 0) {
+                        addressText.append(", ");
+                    }
+                    
+                    // Add sublocality (barangay/neighborhood)
+                    if (subLocality != null && !subLocality.matches("^[A-Z0-9+]+$")) {
+                        addressText.append(subLocality).append(", ");
+                    }
+                    
+                    // Add city
+                    if (locality != null && !locality.matches("^[A-Z0-9+]+$")) {
+                        addressText.append(locality);
+                    } else if (subAdminArea != null && !subAdminArea.matches("^[A-Z0-9+]+$")) {
+                        addressText.append(subAdminArea);
+                    }
+                    
+                    // Add province/region
+                    if (adminArea != null && !adminArea.matches("^[A-Z0-9+]+$") && 
+                        !addressText.toString().contains(adminArea)) {
+                        addressText.append(", ").append(adminArea);
+                    }
+                    
+                    String result = addressText.toString().trim();
+                    
+                    // Remove trailing commas
+                    result = result.replaceAll(",\\s*$", "");
+                    
+                    // Validate result - reject if it's a Plus Code or too short
+                    if (result.isEmpty() || 
+                        result.matches(".*[A-Z0-9]{4}\\+[A-Z0-9]{2,3}.*") || 
+                        result.length() < 5) {
+                        Log.w(TAG, "Invalid address format, rejecting: " + result);
+                        currentAddress = "";
+                    } else {
+                        currentAddress = result;
+                        Log.d(TAG, "✓ Valid address resolved: " + currentAddress);
+                        
+                        if (isAdded()) {
+                            requireActivity().runOnUiThread(() -> 
+                                Toast.makeText(requireContext(), "📍 " + currentAddress, Toast.LENGTH_LONG).show()
+                            );
+                        }
+                    }
+                } else {
+                    Log.w(TAG, "No address found for coordinates");
+                    currentAddress = "";
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Geocoding error: " + e.getMessage());
+                e.printStackTrace();
+                currentAddress = "";
+            }
+        }).start();
+    }
+
     private void saveOrUpdateEmergencyReport(String emergencyType, String description, String aiResponse) {
-        // Extract address from conversation
+        // Refresh location before saving
+        refreshLocationAndSave(emergencyType, description, aiResponse);
+    }
+    
+    private void refreshLocationAndSave(String emergencyType, String description, String aiResponse) {
+        // Try to get fresh location before saving
+        if (ContextCompat.checkSelfPermission(requireContext(), 
+                Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            
+            CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, 
+                    cancellationTokenSource.getToken())
+                    .addOnSuccessListener(location -> {
+                        if (location != null) {
+                            currentLocation = location;
+                            Log.d(TAG, "Fresh location for report: " + location.getLatitude() + ", " + location.getLongitude());
+                            // Get fresh address too
+                            getAddressFromLocation(location);
+                        }
+                        // Continue saving with updated or existing location
+                        performSaveOrUpdate(emergencyType, description, aiResponse);
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.w(TAG, "Could not refresh location, using cached: " + e.getMessage());
+                        // Continue with cached location
+                        performSaveOrUpdate(emergencyType, description, aiResponse);
+                    });
+        } else {
+            // No permission, use cached location
+            performSaveOrUpdate(emergencyType, description, aiResponse);
+        }
+    }
+    
+    private void performSaveOrUpdate(String emergencyType, String description, String aiResponse) {
+        // Extract address from conversation (user might have corrected it)
         String extractedAddress = extractAddressFromConversation(description);
-        String addressStatus = extractedAddress.isEmpty() ? "not_provided" : "provided";
+        
+        // Prefer geocoded address if user hasn't provided one
+        String finalAddress = extractedAddress.isEmpty() ? currentAddress : extractedAddress;
+        String addressStatus = finalAddress.isEmpty() ? "not_provided" : "provided";
         
         // Log extraction results for debugging
-        Log.d(TAG, "Address extraction - Input: " + description);
-        Log.d(TAG, "Address extraction - Result: " + extractedAddress);
-        Log.d(TAG, "Address extraction - Status: " + addressStatus);
+        Log.d(TAG, "Address - Extracted from chat: " + extractedAddress);
+        Log.d(TAG, "Address - From GPS: " + currentAddress);
+        Log.d(TAG, "Address - Final used: " + finalAddress);
+        Log.d(TAG, "Address - Status: " + addressStatus);
         
-        // Mock location data - in production, get actual GPS coordinates
-        String latitude = "14.5995";
-        String longitude = "120.9842";
-        String location = extractedAddress.isEmpty() 
+        // Use real GPS coordinates if available
+        String latitude = currentLocation != null 
+            ? String.format("%.6f", currentLocation.getLatitude())
+            : "14.5995"; // Fallback
+            
+        String longitude = currentLocation != null 
+            ? String.format("%.6f", currentLocation.getLongitude())
+            : "120.9842"; // Fallback
+        
+        Log.d(TAG, "Saving with coordinates - Lat: " + latitude + ", Lon: " + longitude + ", Has currentLocation: " + (currentLocation != null));
+            
+        String location = finalAddress.isEmpty() 
             ? latitude + "° N, " + longitude + "° E (GPS only - no address provided)"
-            : extractedAddress + " (" + latitude + "° N, " + longitude + "° E)";
+            : finalAddress + " (" + latitude + "° N, " + longitude + "° E)";
         
         if (currentReportId == null) {
             // First save - create new report
@@ -387,7 +645,7 @@ public class ChatFragment extends Fragment {
                 location,
                 latitude,
                 longitude,
-                extractedAddress.isEmpty() ? "Not provided" : extractedAddress,
+                finalAddress.isEmpty() ? "Not provided" : finalAddress,
                 addressStatus,
                 aiResponse
             );
@@ -414,9 +672,9 @@ public class ChatFragment extends Fragment {
             });
         } else {
             // Update existing report
-            Log.d(TAG, "Updating report " + currentReportId + " with address: " + extractedAddress + ", status: " + addressStatus);
+            Log.d(TAG, "Updating report " + currentReportId + " with address: " + finalAddress + ", status: " + addressStatus);
             
-            firebaseReportManager.updateReport(currentReportId, description, extractedAddress, 
+            firebaseReportManager.updateReport(currentReportId, description, finalAddress, 
                     addressStatus, location, aiResponse, new FirebaseReportManager.SaveCallback() {
                 @Override
                 public void onSuccess() {
