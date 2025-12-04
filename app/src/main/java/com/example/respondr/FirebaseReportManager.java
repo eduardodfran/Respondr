@@ -29,8 +29,8 @@ public class FirebaseReportManager {
         public String emergencyType;
         public String description;
         public String location;
-        public String latitude;
-        public String longitude;
+        public Object latitude;  // Can be String or Double from Firebase
+        public Object longitude; // Can be String or Double from Firebase
         public String address; // User-provided address from conversation
         public String addressStatus; // "provided", "not_provided", "gps_only"
         public String timestamp;
@@ -56,6 +56,17 @@ public class FirebaseReportManager {
             this.status = "Sent";
             this.aiResponse = aiResponse;
         }
+        
+        // Helper methods to get latitude/longitude as String
+        public String getLatitudeString() {
+            if (latitude == null) return "0.0";
+            return latitude.toString();
+        }
+        
+        public String getLongitudeString() {
+            if (longitude == null) return "0.0";
+            return longitude.toString();
+        }
 
         public Map<String, Object> toMap() {
             Map<String, Object> result = new HashMap<>();
@@ -63,8 +74,8 @@ public class FirebaseReportManager {
             result.put("emergencyType", emergencyType);
             result.put("description", description);
             result.put("location", location);
-            result.put("latitude", latitude);
-            result.put("longitude", longitude);
+            result.put("latitude", getLatitudeString());
+            result.put("longitude", getLongitudeString());
             result.put("address", address != null ? address : "Not provided");
             result.put("addressStatus", addressStatus != null ? addressStatus : "not_provided");
             result.put("timestamp", timestamp);
@@ -193,17 +204,28 @@ public class FirebaseReportManager {
     public List<HistoryItem> convertToHistoryItems(List<EmergencyReport> reports) {
         List<HistoryItem> historyItems = new ArrayList<>();
         
+        if (reports == null || reports.isEmpty()) {
+            Log.d(TAG, "No reports to convert");
+            return historyItems;
+        }
+        
         for (EmergencyReport report : reports) {
-            String timeAgo = getTimeAgo(report.timestamp);
-            String location = report.latitude + "° N, " + report.longitude + "° E";
-            
-            historyItems.add(new HistoryItem(
-                report.emergencyType,
-                timeAgo,
-                location,
-                report.description,
-                report.status
-            ));
+            try {
+                String timeAgo = getTimeAgo(report.timestamp != null ? report.timestamp : "");
+                String location = (report.latitude != null && report.longitude != null) 
+                    ? report.getLatitudeString() + "° N, " + report.getLongitudeString() + "° E" 
+                    : "Location unavailable";
+                
+                historyItems.add(new HistoryItem(
+                    report.emergencyType != null ? report.emergencyType : "Emergency",
+                    timeAgo,
+                    location,
+                    report.description != null ? report.description : "No description",
+                    report.status != null ? report.status : "Sent"
+                ));
+            } catch (Exception e) {
+                Log.e(TAG, "Error converting report to history item", e);
+            }
         }
         
         return historyItems;

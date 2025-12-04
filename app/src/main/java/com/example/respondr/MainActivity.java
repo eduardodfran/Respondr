@@ -50,10 +50,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             switchToFragment(new ChatFragment(), "Chat");
         } else if (id == R.id.nav_history) {
             switchToFragment(new HistoryFragment(), "History");
-        } else if (id == R.id.nav_test_report) {
-            // Open Test Report Activity
-            Intent intent = new Intent(this, TestReportActivity.class);
-            startActivity(intent);
         } else if (id == R.id.nav_settings) {
             // TODO: Implement Settings
         }

@@ -37,14 +37,6 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize">
         </activity>
-        
-        <!-- Test Report Activity - For testing Firebase without Gemini API -->
-        <activity
-            android:name=".TestReportActivity"
-            android:exported="false"
-            android:label="Test Firebase Report"
-            android:windowSoftInputMode="adjustResize">
-        </activity>
     </application>
 
 </manifest>
