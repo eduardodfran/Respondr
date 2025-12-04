@@ -97,12 +97,52 @@ public class ChatFragment extends Fragment {
         firebaseReportManager = new FirebaseReportManager();
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
 
-        showWelcomeMessage();
+        // Check if restoring existing conversation from history
+        Bundle args = getArguments();
+        if (args != null && args.containsKey("reportId")) {
+            restoreConversation(args);
+        } else {
+            showWelcomeMessage();
+        }
+        
         setupEmergencyButtons();
         setupInputActions();
         requestLocationPermissionAndFetch();
 
         return view;
+    }
+    
+    private void restoreConversation(Bundle args) {
+        currentReportId = args.getString("reportId");
+        String description = args.getString("description");
+        String aiResponse = args.getString("aiResponse");
+        selectedEmergencyType = args.getString("emergencyType", "");
+        isFirstMessage = false;
+        
+        Log.d(TAG, "Restoring conversation - User message: " + (description != null));
+        Log.d(TAG, "Restoring conversation - AI response: " + (aiResponse != null));
+        
+        // Add user's original message
+        if (description != null && !description.isEmpty()) {
+            ChatMessage userMsg = new ChatMessage(description, true);
+            chatAdapter.addMessage(userMsg);
+            conversationHistory.append("User: ").append(description).append("\n");
+            Log.d(TAG, "Added user message, isUser=" + userMsg.isUser());
+        }
+        
+        // Add AI's response
+        if (aiResponse != null && !aiResponse.isEmpty()) {
+            ChatMessage aiMsg = new ChatMessage(aiResponse, false);
+            chatAdapter.addMessage(aiMsg);
+            conversationHistory.append("Assistant: ").append(aiResponse).append("\n");
+            Log.d(TAG, "Added AI message, isUser=" + aiMsg.isUser());
+        }
+        
+        // Add continuation prompt
+        chatRecyclerView.post(() -> {
+            chatAdapter.addMessage(new ChatMessage("You can continue this conversation below.", false));
+            chatRecyclerView.smoothScrollToPosition(chatAdapter.getItemCount() - 1);
+        });
     }
 
     private void showWelcomeMessage() {

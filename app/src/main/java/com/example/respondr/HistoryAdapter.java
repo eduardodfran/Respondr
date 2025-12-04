@@ -11,10 +11,16 @@ import java.util.List;
 
 public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder> {
 
-    private List<HistoryItem> historyItems;
+    public interface OnItemClickListener {
+        void onItemClick(HistoryItem item);
+    }
 
-    public HistoryAdapter(List<HistoryItem> historyItems) {
+    private List<HistoryItem> historyItems;
+    private OnItemClickListener listener;
+
+    public HistoryAdapter(List<HistoryItem> historyItems, OnItemClickListener listener) {
         this.historyItems = historyItems;
+        this.listener = listener;
     }
 
     @NonNull
@@ -31,6 +37,19 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.HistoryV
             HistoryItem item = historyItems.get(position);
             
             if (item == null) return;
+            
+            // Set click listener only if status is not "Resolved"
+            if (!"Resolved".equals(item.getStatus())) {
+                holder.itemView.setOnClickListener(v -> {
+                    if (listener != null) {
+                        listener.onItemClick(item);
+                    }
+                });
+                holder.itemView.setAlpha(1.0f);
+            } else {
+                holder.itemView.setOnClickListener(null);
+                holder.itemView.setAlpha(0.6f); // Dim resolved items
+            }
             
             holder.tvEmergencyType.setText(item.getEmergencyType() != null ? item.getEmergencyType() : "Emergency");
             holder.tvTimestamp.setText(item.getTimestamp() != null ? item.getTimestamp() : "Unknown time");

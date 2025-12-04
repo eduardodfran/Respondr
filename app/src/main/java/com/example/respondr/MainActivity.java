@@ -51,7 +51,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         } else if (id == R.id.nav_history) {
             switchToFragment(new HistoryFragment(), "History");
         } else if (id == R.id.nav_settings) {
-            // TODO: Implement Settings
+            switchToFragment(new SettingsFragment(), "Settings");
         }
 
         drawerLayout.closeDrawer(GravityCompat.START);

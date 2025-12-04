@@ -37,7 +37,7 @@ public class HistoryFragment extends Fragment {
 
         // Setup RecyclerView
         historyItems = new ArrayList<>();
-        adapter = new HistoryAdapter(historyItems);
+        adapter = new HistoryAdapter(historyItems, this::onHistoryItemClick);
         recyclerViewHistory.setLayoutManager(new LinearLayoutManager(getContext()));
         recyclerViewHistory.setAdapter(adapter);
 
@@ -83,6 +83,35 @@ public class HistoryFragment extends Fragment {
             emptyState.setVisibility(View.GONE);
             recyclerViewHistory.setVisibility(View.VISIBLE);
             adapter.notifyDataSetChanged();
+        }
+    }
+
+    private void onHistoryItemClick(HistoryItem item) {
+        if ("Resolved".equals(item.getStatus())) {
+            android.widget.Toast.makeText(requireContext(), 
+                "This emergency has been resolved", 
+                android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Navigate back to chat with this conversation
+        Bundle bundle = new Bundle();
+        bundle.putString("reportId", item.getReportId());
+        bundle.putString("description", item.getDescription());
+        bundle.putString("aiResponse", item.getAiResponse());
+        bundle.putString("emergencyType", item.getEmergencyType());
+        
+        ChatFragment chatFragment = new ChatFragment();
+        chatFragment.setArguments(bundle);
+        
+        requireActivity().getSupportFragmentManager()
+            .beginTransaction()
+            .replace(R.id.fragmentContainer, chatFragment)
+            .commit();
+        
+        // Update toolbar title
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).setToolbarTitle("Chat");
         }
     }
 

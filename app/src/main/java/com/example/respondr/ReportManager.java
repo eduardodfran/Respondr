@@ -131,7 +131,9 @@ public class ReportManager {
                 timeAgo,
                 location,
                 report.description,
-                report.status
+                report.status,
+                report.id != null ? report.id : "",
+                report.aiResponse != null ? report.aiResponse : ""
             ));
         }
         

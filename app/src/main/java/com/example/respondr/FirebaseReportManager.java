@@ -221,7 +221,9 @@ public class FirebaseReportManager {
                     timeAgo,
                     location,
                     report.description != null ? report.description : "No description",
-                    report.status != null ? report.status : "Sent"
+                    report.status != null ? report.status : "Sent",
+                    report.id,
+                    report.aiResponse
                 ));
             } catch (Exception e) {
                 Log.e(TAG, "Error converting report to history item", e);

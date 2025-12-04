@@ -6,13 +6,17 @@ public class HistoryItem {
     private String location;
     private String description;
     private String status;
+    private String reportId;
+    private String aiResponse;
 
-    public HistoryItem(String emergencyType, String timestamp, String location, String description, String status) {
+    public HistoryItem(String emergencyType, String timestamp, String location, String description, String status, String reportId, String aiResponse) {
         this.emergencyType = emergencyType;
         this.timestamp = timestamp;
         this.location = location;
         this.description = description;
         this.status = status;
+        this.reportId = reportId;
+        this.aiResponse = aiResponse;
     }
 
     public String getEmergencyType() {
@@ -33,5 +37,13 @@ public class HistoryItem {
 
     public String getStatus() {
         return status;
+    }
+    
+    public String getReportId() {
+        return reportId;
+    }
+    
+    public String getAiResponse() {
+        return aiResponse;
     }
 }

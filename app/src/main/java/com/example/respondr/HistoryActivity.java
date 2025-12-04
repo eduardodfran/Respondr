@@ -29,7 +29,14 @@ public class HistoryActivity extends AppCompatActivity {
 
         // Setup RecyclerView
         historyItems = new ArrayList<>();
-        adapter = new HistoryAdapter(historyItems);
+        adapter = new HistoryAdapter(historyItems, item -> {
+            // Handle click - could navigate to detail view if needed
+            if ("Resolved".equals(item.getStatus())) {
+                android.widget.Toast.makeText(this, 
+                    "This emergency has been resolved", 
+                    android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
         recyclerViewHistory.setLayoutManager(new LinearLayoutManager(this));
         recyclerViewHistory.setAdapter(adapter);
 
@@ -47,7 +54,9 @@ public class HistoryActivity extends AppCompatActivity {
                 "2 hours ago",
                 "14.5995° N, 120.9842° E",
                 "Patient experiencing chest pain and difficulty breathing",
-                "Sent"
+                "Sent",
+                "sample_id_1",
+                "Emergency services have been notified."
         ));
 
         historyItems.add(new HistoryItem(
@@ -55,7 +64,9 @@ public class HistoryActivity extends AppCompatActivity {
                 "Yesterday",
                 "14.6042° N, 121.0017° E",
                 "Small fire in residential building, residents evacuated",
-                "Resolved"
+                "Resolved",
+                "sample_id_2",
+                "Fire department responded successfully."
         ));
 
         historyItems.add(new HistoryItem(
@@ -63,7 +74,9 @@ public class HistoryActivity extends AppCompatActivity {
                 "3 days ago",
                 "14.5547° N, 121.0244° E",
                 "Two-vehicle collision, minor injuries reported",
-                "Resolved"
+                "Resolved",
+                "sample_id_3",
+                "Police arrived and filed incident report."
         ));
 
         updateUI();
