@@ -77,10 +77,10 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.HistoryV
                 } else if (type.contains("POLICE") || type.contains("Police")) {
                     holder.tvEmergencyIcon.setText("🚓");
                 } else {
-                    holder.tvEmergencyIcon.setText("🚨");
+                    holder.tvEmergencyIcon.setText("");
                 }
             } else {
-                holder.tvEmergencyIcon.setText("🚨");
+                holder.tvEmergencyIcon.setText("");
             }
         } catch (Exception e) {
             e.printStackTrace();

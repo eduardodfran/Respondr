@@ -10,17 +10,20 @@
 
     <ImageView
         android:id="@+id/nav_header_icon"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
         android:src="@drawable/ic_app_logo"
         android:contentDescription="App Logo"
+        android:background="@null"
+        android:tint="@null"
+        android:scaleType="fitCenter"
         android:layout_marginBottom="8dp" />
 
     <TextView
         android:id="@+id/nav_header_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="🚨 Respondr"
+        android:text="Respondr"
         android:textAppearance="@style/TextAppearance.AppCompat.Body1"
         android:textColor="#FFFFFF"
         android:textSize="18sp"

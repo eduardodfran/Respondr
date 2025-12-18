@@ -147,7 +147,7 @@ public class ChatFragment extends Fragment {
 
     private void showWelcomeMessage() {
         chatRecyclerView.post(() -> chatAdapter.addMessage(new ChatMessage(
-                "🚨 **Ready to help!**\n\nDescribe your emergency by typing, speaking, or tapping a button above.",
+                "**Ready to help!**\n\nDescribe your emergency by typing, speaking, or tapping a button above.",
                 false
         )));
     }
@@ -258,11 +258,30 @@ public class ChatFragment extends Fragment {
     private String buildEnhancedPrompt(String userMessage) {
         StringBuilder prompt = new StringBuilder();
         
-        // If this is not the first message, include conversation context
+        // If this is not the first message, include ONLY the last 2-3 exchanges to reduce token usage
+        // This prevents quota exhaustion while maintaining context
         if (!isFirstMessage && conversationHistory.length() > 0) {
-            prompt.append("Previous conversation context:\n")
-                    .append(conversationHistory.toString())
-                    .append("\n---\n\n");
+            String fullHistory = conversationHistory.toString();
+            String[] exchanges = fullHistory.split("\n\n");
+            
+            // Keep only the last 2 complete exchanges (user + assistant pairs) max ~300 chars
+            StringBuilder recentContext = new StringBuilder();
+            int exchangesToKeep = Math.min(2, exchanges.length);
+            int startIdx = Math.max(0, exchanges.length - exchangesToKeep);
+            
+            for (int i = startIdx; i < exchanges.length; i++) {
+                recentContext.append(exchanges[i]).append("\n\n");
+            }
+            
+            // Limit total context to 300 characters to save tokens
+            String limitedContext = recentContext.toString();
+            if (limitedContext.length() > 300) {
+                limitedContext = limitedContext.substring(limitedContext.length() - 300);
+            }
+            
+            prompt.append("Recent conversation:\n")
+                    .append(limitedContext)
+                    .append("---\n\n");
         }
         
         prompt.append("You are a professional emergency dispatcher with 10+ years of experience. ")

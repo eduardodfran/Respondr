@@ -35,6 +35,12 @@ public class GeminiClient {
     private static final String GEMINI_API_KEY = BuildConfig.GEMINI_API_KEY;
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    
+    // Rate limiting: Free tier has 20 requests per minute limit
+    // Add 3 second minimum cooldown between requests to prevent quota exhaustion
+    private static final long MIN_REQUEST_INTERVAL_MS = 3000; // 3 seconds
+    private static long lastRequestTime = 0;
+    private static boolean isRequestInProgress = false;
 
     private final OkHttpClient client;
     private final Context ctx;
@@ -50,6 +56,26 @@ public class GeminiClient {
     }
 
     public void sendMessage(String message, ResultCallback cb) {
+        // Check if another request is already in progress
+        if (isRequestInProgress) {
+            cb.onFailure("Please wait for the previous response before sending another message.");
+            return;
+        }
+        
+        // Rate limiting: enforce minimum interval between requests
+        long currentTime = System.currentTimeMillis();
+        long timeSinceLastRequest = currentTime - lastRequestTime;
+        
+        if (timeSinceLastRequest < MIN_REQUEST_INTERVAL_MS) {
+            long waitTime = (MIN_REQUEST_INTERVAL_MS - timeSinceLastRequest) / 1000;
+            cb.onFailure("Please wait " + waitTime + " seconds before sending another message to avoid exceeding API quota.");
+            return;
+        }
+        
+        // Mark request as in progress
+        isRequestInProgress = true;
+        lastRequestTime = currentTime;
+        
         // Build request body for Gemini API: { "contents": [{ "parts": [{ "text": "..." }] }] }
         JsonObject root = new JsonObject();
         JsonObject part = new JsonObject();
@@ -90,23 +116,41 @@ public class GeminiClient {
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                isRequestInProgress = false; // Reset state on failure
                 cb.onFailure("Network error: Unable to connect. Please check your internet connection.");
             }
 
             @Override
             public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 if (!response.isSuccessful()) {
+                    isRequestInProgress = false; // Reset state on error
                     String respBody = response.body() != null ? response.body().string() : "";
+                    
                     // Try to extract error message from response
                     try {
                         JsonObject errorObj = JsonParser.parseString(respBody).getAsJsonObject();
                         if (errorObj.has("error")) {
                             JsonObject error = errorObj.getAsJsonObject("error");
                             String errorMsg = error.has("message") ? error.get("message").getAsString() : "Unknown error";
+                            
+                            // Detect quota exceeded errors
+                            if (errorMsg.contains("quota") || errorMsg.contains("rate limit") || 
+                                errorMsg.contains("exceeded") || response.code() == 429) {
+                                cb.onFailure("⚠️ API Quota Exceeded\n\nThe free Gemini API has a limit of 20 requests per minute. Please wait a few minutes before trying again.\n\nTip: Avoid sending multiple messages quickly to prevent this error.");
+                                return;
+                            }
+                            
                             cb.onFailure("API Error: " + errorMsg);
                             return;
                         }
                     } catch (Exception ignored) {}
+                    
+                    // Check for 429 status code (Too Many Requests)
+                    if (response.code() == 429) {
+                        cb.onFailure("⚠️ Too Many Requests\n\nYou've sent too many messages too quickly. Please wait 60 seconds before trying again to stay within API limits.");
+                        return;
+                    }
+                    
                     cb.onFailure("API Error: " + response.message());
                     return;
                 }
@@ -131,12 +175,14 @@ public class GeminiClient {
                             }
                         }
                         String reply = sb.length() > 0 ? sb.toString() : body;
+                        isRequestInProgress = false; // Reset state on success
                         cb.onSuccess(reply);
                         return;
                     }
                 } catch (Exception ignored) {
                 }
                 // fallback: return the raw response
+                isRequestInProgress = false; // Reset state
                 cb.onSuccess(body);
             }
         });
