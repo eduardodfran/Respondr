@@ -17,7 +17,6 @@ public class SettingsFragment extends Fragment {
 
     private Switch switchNotifications;
     private Switch switchAutoSend;
-    private Switch switchLocationTracking;
     private TextView tvAppVersion;
     private SharedPreferences prefs;
 
@@ -32,7 +31,6 @@ public class SettingsFragment extends Fragment {
         // Initialize views
         switchNotifications = view.findViewById(R.id.switchNotifications);
         switchAutoSend = view.findViewById(R.id.switchAutoSend);
-        switchLocationTracking = view.findViewById(R.id.switchLocationTracking);
         tvAppVersion = view.findViewById(R.id.tvAppVersion);
 
         // Load saved preferences
@@ -50,7 +48,6 @@ public class SettingsFragment extends Fragment {
     private void loadSettings() {
         switchNotifications.setChecked(prefs.getBoolean("notifications_enabled", true));
         switchAutoSend.setChecked(prefs.getBoolean("auto_send_location", true));
-        switchLocationTracking.setChecked(prefs.getBoolean("location_tracking", true));
     }
 
     private void setupListeners() {
@@ -65,13 +62,6 @@ public class SettingsFragment extends Fragment {
             prefs.edit().putBoolean("auto_send_location", isChecked).apply();
             Toast.makeText(requireContext(), 
                 isChecked ? "Auto-send location enabled" : "Auto-send location disabled", 
-                Toast.LENGTH_SHORT).show();
-        });
-
-        switchLocationTracking.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            prefs.edit().putBoolean("location_tracking", isChecked).apply();
-            Toast.makeText(requireContext(), 
-                isChecked ? "Location tracking enabled" : "Location tracking disabled", 
                 Toast.LENGTH_SHORT).show();
         });
     }
