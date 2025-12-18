@@ -17,10 +17,7 @@ import androidx.fragment.app.Fragment;
 
 public class SettingsFragment extends Fragment {
 
-    private static final String PREFS_NAME = "RespondrSettings";
-    private static final String KEY_NOTIFICATIONS_ENABLED = "notifications_enabled";
-    private static final String KEY_AUTO_SEND_LOCATION = "auto_send_location";
-    public static final String KEY_SAVE_HISTORY_ENABLED = "save_history_enabled";
+    public static final String KEY_SAVE_HISTORY_ENABLED = AppPreferences.KEY_SAVE_HISTORY_ENABLED;
 
     private Switch switchNotifications;
     private Switch switchAutoSend;
@@ -35,7 +32,7 @@ public class SettingsFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_settings, container, false);
 
         // Initialize SharedPreferences
-        prefs = requireContext().getSharedPreferences(PREFS_NAME, requireContext().MODE_PRIVATE);
+        prefs = requireContext().getSharedPreferences(AppPreferences.PREFS_NAME, requireContext().MODE_PRIVATE);
 
         // Initialize views
         switchNotifications = view.findViewById(R.id.switchNotifications);
@@ -57,28 +54,28 @@ public class SettingsFragment extends Fragment {
     }
 
     private void loadSettings() {
-        switchNotifications.setChecked(prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, true));
-        switchAutoSend.setChecked(prefs.getBoolean(KEY_AUTO_SEND_LOCATION, true));
-        switchSaveHistory.setChecked(prefs.getBoolean(KEY_SAVE_HISTORY_ENABLED, true));
+        switchNotifications.setChecked(prefs.getBoolean(AppPreferences.KEY_NOTIFICATIONS_ENABLED, true));
+        switchAutoSend.setChecked(prefs.getBoolean(AppPreferences.KEY_AUTO_SEND_LOCATION, true));
+        switchSaveHistory.setChecked(prefs.getBoolean(AppPreferences.KEY_SAVE_HISTORY_ENABLED, true));
     }
 
     private void setupListeners() {
         switchNotifications.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            prefs.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, isChecked).apply();
+            prefs.edit().putBoolean(AppPreferences.KEY_NOTIFICATIONS_ENABLED, isChecked).apply();
             Toast.makeText(requireContext(), 
                 isChecked ? "Notifications enabled" : "Notifications disabled", 
                 Toast.LENGTH_SHORT).show();
         });
 
         switchAutoSend.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            prefs.edit().putBoolean(KEY_AUTO_SEND_LOCATION, isChecked).apply();
+            prefs.edit().putBoolean(AppPreferences.KEY_AUTO_SEND_LOCATION, isChecked).apply();
             Toast.makeText(requireContext(), 
                 isChecked ? "Auto-send location enabled" : "Auto-send location disabled", 
                 Toast.LENGTH_SHORT).show();
         });
 
         switchSaveHistory.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            prefs.edit().putBoolean(KEY_SAVE_HISTORY_ENABLED, isChecked).apply();
+            prefs.edit().putBoolean(AppPreferences.KEY_SAVE_HISTORY_ENABLED, isChecked).apply();
             Toast.makeText(requireContext(),
                 isChecked ? "History saving enabled" : "History saving disabled",
                 Toast.LENGTH_SHORT).show();
@@ -95,26 +92,27 @@ public class SettingsFragment extends Fragment {
     }
 
     private void clearHistory() {
-        FirebaseReportManager manager = new FirebaseReportManager(requireContext());
         btnClearHistory.setEnabled(false);
-        manager.clearAllReports(new FirebaseReportManager.SaveCallback() {
-            @Override
-            public void onSuccess() {
-                if (!isAdded()) return;
-                requireActivity().runOnUiThread(() -> {
-                    btnClearHistory.setEnabled(true);
-                    Toast.makeText(requireContext(), "History cleared", Toast.LENGTH_SHORT).show();
-                });
+        try {
+            new LocalHistoryStore(requireContext()).clearAll();
+            // Also clear any legacy local JSON cache if present
+            try {
+                new ReportManager(requireContext()).clearAllReports();
+            } catch (Exception ignored) {
+                // Best-effort
             }
 
-            @Override
-            public void onError(String error) {
-                if (!isAdded()) return;
-                requireActivity().runOnUiThread(() -> {
-                    btnClearHistory.setEnabled(true);
-                    Toast.makeText(requireContext(), "Failed to clear history", Toast.LENGTH_SHORT).show();
-                });
-            }
-        });
+            if (!isAdded()) return;
+            requireActivity().runOnUiThread(() -> {
+                btnClearHistory.setEnabled(true);
+                Toast.makeText(requireContext(), "History cleared", Toast.LENGTH_SHORT).show();
+            });
+        } catch (Exception e) {
+            if (!isAdded()) return;
+            requireActivity().runOnUiThread(() -> {
+                btnClearHistory.setEnabled(true);
+                Toast.makeText(requireContext(), "Failed to clear history", Toast.LENGTH_SHORT).show();
+            });
+        }
     }
 }

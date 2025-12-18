@@ -21,7 +21,7 @@ public class HistoryFragment extends Fragment {
     private LinearLayout emptyState;
     private HistoryAdapter adapter;
     private List<HistoryItem> historyItems;
-    private FirebaseReportManager firebaseReportManager;
+    private LocalHistoryStore localHistoryStore;
 
     @Nullable
     @Override
@@ -32,8 +32,8 @@ public class HistoryFragment extends Fragment {
         recyclerViewHistory = view.findViewById(R.id.recyclerViewHistory);
         emptyState = view.findViewById(R.id.emptyState);
 
-        // Initialize FirebaseReportManager
-        firebaseReportManager = new FirebaseReportManager();
+        // Initialize local history store (SQLite)
+        localHistoryStore = new LocalHistoryStore(requireContext());
 
         // Setup RecyclerView
         historyItems = new ArrayList<>();
@@ -48,31 +48,16 @@ public class HistoryFragment extends Fragment {
     }
 
     private void loadHistory() {
-        // Load from Firebase
-        firebaseReportManager.loadReports(new FirebaseReportManager.ReportsCallback() {
-            @Override
-            public void onSuccess(List<FirebaseReportManager.EmergencyReport> reports) {
-                if (!isAdded()) return;
-                
-                requireActivity().runOnUiThread(() -> {
-                    historyItems.clear();
-                    historyItems.addAll(firebaseReportManager.convertToHistoryItems(reports));
-                    updateUI();
-                });
-            }
+        if (!AppPreferences.isSaveHistoryEnabled(requireContext())) {
+            historyItems.clear();
+            updateUI();
+            return;
+        }
 
-            @Override
-            public void onError(String error) {
-                if (!isAdded()) return;
-                
-                requireActivity().runOnUiThread(() -> {
-                    android.widget.Toast.makeText(requireContext(), 
-                        "Error loading history: " + error, 
-                        android.widget.Toast.LENGTH_SHORT).show();
-                    updateUI();
-                });
-            }
-        });
+        // Load from local SQLite
+        historyItems.clear();
+        historyItems.addAll(localHistoryStore.getHistoryItems());
+        updateUI();
     }
 
     private void updateUI() {

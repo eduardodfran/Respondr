@@ -115,7 +115,7 @@ public class FirebaseReportManager {
 
     public void saveReport(EmergencyReport report, SaveCallback callback) {
         Log.d(TAG, "Attempting to save report to Firebase...");
-        
+
         String key = databaseReference.push().getKey();
         if (key == null) {
             String error = "Failed to generate report key";
@@ -126,10 +126,10 @@ public class FirebaseReportManager {
 
         report.id = key;
         Map<String, Object> reportData = report.toMap();
-        
+
         Log.d(TAG, "Saving report with key: " + key);
         Log.d(TAG, "Report data: " + reportData.toString());
-        
+
         databaseReference.child(key).setValue(reportData)
             .addOnSuccessListener(aVoid -> {
                 Log.d(TAG, "Report saved successfully to Firebase with ID: " + key);
@@ -148,14 +148,14 @@ public class FirebaseReportManager {
                 @Override
                 public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                     List<EmergencyReport> reports = new ArrayList<>();
-                    
+
                     for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
                         EmergencyReport report = snapshot.getValue(EmergencyReport.class);
                         if (report != null) {
                             reports.add(0, report); // Add to beginning for reverse chronological order
                         }
                     }
-                    
+
                     Log.d(TAG, "Loaded " + reports.size() + " reports from Firebase");
                     callback.onSuccess(reports);
                 }
@@ -197,6 +197,18 @@ public class FirebaseReportManager {
             })
             .addOnFailureListener(e -> {
                 Log.e(TAG, "Error updating report", e);
+                callback.onError(e.getMessage() != null ? e.getMessage() : "Unknown error");
+            });
+    }
+
+    public void clearAllReports(SaveCallback callback) {
+        databaseReference.removeValue()
+            .addOnSuccessListener(aVoid -> {
+                Log.d(TAG, "All reports cleared successfully");
+                callback.onSuccess();
+            })
+            .addOnFailureListener(e -> {
+                Log.e(TAG, "Error clearing reports", e);
                 callback.onError(e.getMessage() != null ? e.getMessage() : "Unknown error");
             });
     }

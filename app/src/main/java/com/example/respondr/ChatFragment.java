@@ -60,6 +60,7 @@ public class ChatFragment extends Fragment {
     private Markwon markwon;
     private GeminiClient geminiClient;
     private FirebaseReportManager firebaseReportManager;
+    private LocalHistoryStore localHistoryStore;
     private FusedLocationProviderClient fusedLocationClient;
     private Location currentLocation = null;
     private String currentAddress = "";
@@ -68,7 +69,15 @@ public class ChatFragment extends Fragment {
     private String currentUserMessage = "";
     private StringBuilder conversationHistory = new StringBuilder();
     private boolean isFirstMessage = true;
-    private String currentReportId = null; // Track the current report ID to update instead of creating duplicates
+    private String currentReportId = null; // Local history report ID (SQLite)
+    private String firebaseReportId = null; // Firebase report ID (to avoid duplicates)
+    private boolean firebaseCreateInFlight = false;
+    private boolean firebasePendingUpdate = false;
+    private String pendingDescription;
+    private String pendingAddress;
+    private String pendingAddressStatus;
+    private String pendingLocation;
+    private String pendingAiResponse;
 
     @Nullable
     @Override
@@ -95,6 +104,7 @@ public class ChatFragment extends Fragment {
 
         geminiClient = new GeminiClient(requireContext());
         firebaseReportManager = new FirebaseReportManager();
+        localHistoryStore = new LocalHistoryStore(requireContext());
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
 
         // Check if restoring existing conversation from history
@@ -107,7 +117,9 @@ public class ChatFragment extends Fragment {
         
         setupEmergencyButtons();
         setupInputActions();
-        requestLocationPermissionAndFetch();
+        if (AppPreferences.isAutoSendLocationEnabled(requireContext())) {
+            requestLocationPermissionAndFetch();
+        }
 
         return view;
     }
@@ -170,7 +182,15 @@ public class ChatFragment extends Fragment {
     private void resetConversation() {
         conversationHistory = new StringBuilder();
         isFirstMessage = true;
-        currentReportId = null; // Reset report ID for new conversation
+        currentReportId = null; // Reset local history ID for new conversation
+        firebaseReportId = null;
+        firebaseCreateInFlight = false;
+        firebasePendingUpdate = false;
+        pendingDescription = null;
+        pendingAddress = null;
+        pendingAddressStatus = null;
+        pendingLocation = null;
+        pendingAiResponse = null;
     }
 
     private void prefillEmergency(String type, String message) {
@@ -639,6 +659,10 @@ public class ChatFragment extends Fragment {
     }
     
     private void refreshLocationAndSave(String emergencyType, String description, String aiResponse) {
+        if (!AppPreferences.isAutoSendLocationEnabled(requireContext())) {
+            performSaveOrUpdate(emergencyType, description, aiResponse);
+            return;
+        }
         // Try to get fresh location before saving
         if (ContextCompat.checkSelfPermission(requireContext(), 
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -681,23 +705,65 @@ public class ChatFragment extends Fragment {
         Log.d(TAG, "Address - Final used: " + finalAddress);
         Log.d(TAG, "Address - Status: " + addressStatus);
         
-        // Use real GPS coordinates if available
-        String latitude = currentLocation != null 
+        final boolean autoSendLocationEnabled = AppPreferences.isAutoSendLocationEnabled(requireContext());
+
+        // Use real GPS coordinates if available (only if setting enabled)
+        String latitude = (autoSendLocationEnabled && currentLocation != null)
             ? String.format("%.6f", currentLocation.getLatitude())
-            : "14.5995"; // Fallback
-            
-        String longitude = currentLocation != null 
+            : "0.0";
+
+        String longitude = (autoSendLocationEnabled && currentLocation != null)
             ? String.format("%.6f", currentLocation.getLongitude())
-            : "120.9842"; // Fallback
+            : "0.0";
         
         Log.d(TAG, "Saving with coordinates - Lat: " + latitude + ", Lon: " + longitude + ", Has currentLocation: " + (currentLocation != null));
             
-        String location = finalAddress.isEmpty() 
-            ? latitude + "° N, " + longitude + "° E (GPS only - no address provided)"
-            : finalAddress + " (" + latitude + "° N, " + longitude + "° E)";
+        String location;
+        if (!autoSendLocationEnabled) {
+            location = finalAddress.isEmpty() ? "Location not shared" : finalAddress;
+        } else {
+            location = finalAddress.isEmpty()
+                ? latitude + "° N, " + longitude + "° E (GPS only - no address provided)"
+                : finalAddress + " (" + latitude + "° N, " + longitude + "° E)";
+        }
+
+        // 1) Save to local history (personalized per-device)
+        if (AppPreferences.isSaveHistoryEnabled(requireContext())) {
+            if (currentReportId == null) {
+                currentReportId = String.valueOf(System.currentTimeMillis());
+            }
+
+            LocalHistoryStore.LocalReport localReport = new LocalHistoryStore.LocalReport();
+            localReport.id = currentReportId;
+            localReport.emergencyType = emergencyType;
+            localReport.description = description;
+            localReport.location = location;
+            localReport.latitude = latitude;
+            localReport.longitude = longitude;
+            localReport.address = finalAddress;
+            localReport.addressStatus = addressStatus;
+            localReport.status = "Sent";
+            localReport.aiResponse = aiResponse;
+            localReport.timestampMs = System.currentTimeMillis();
+            localHistoryStore.upsert(localReport);
+        }
         
-        if (currentReportId == null) {
-            // First save - create new report
+        // 2) Best-effort send/update to Firebase for external dashboards/responders
+        // (This is intentionally not tied to the Save History toggle.)
+        if (firebaseReportId == null) {
+            if (firebaseCreateInFlight) {
+                // Don't create duplicates while the first create is in flight.
+                firebasePendingUpdate = true;
+                pendingDescription = description;
+                pendingAddress = finalAddress;
+                pendingAddressStatus = addressStatus;
+                pendingLocation = location;
+                pendingAiResponse = aiResponse;
+                Log.d(TAG, "Firebase create in-flight; queued update instead of creating duplicate report");
+                return;
+            }
+
+            firebaseCreateInFlight = true;
             FirebaseReportManager.EmergencyReport report = new FirebaseReportManager.EmergencyReport(
                 emergencyType,
                 description,
@@ -708,49 +774,56 @@ public class ChatFragment extends Fragment {
                 addressStatus,
                 aiResponse
             );
-            
-            Log.d(TAG, "Creating new report with address: " + report.address + ", status: " + report.addressStatus);
-            
             firebaseReportManager.saveReport(report, new FirebaseReportManager.SaveCallback() {
                 @Override
                 public void onSuccess() {
-                    currentReportId = report.id; // Store the report ID for future updates
-                    Log.d(TAG, "Emergency report created in Firebase: " + emergencyType + " with ID: " + currentReportId);
-                    if (isAdded()) {
-                        Toast.makeText(requireContext(), "✓ Report saved", Toast.LENGTH_SHORT).show();
+                    firebaseReportId = report.id;
+                    firebaseCreateInFlight = false;
+                    Log.d(TAG, "Emergency report created in Firebase: " + emergencyType + " with ID: " + firebaseReportId);
+
+                    if (firebasePendingUpdate && firebaseReportId != null) {
+                        firebasePendingUpdate = false;
+                        firebaseReportManager.updateReport(
+                            firebaseReportId,
+                            pendingDescription != null ? pendingDescription : description,
+                            pendingAddress,
+                            pendingAddressStatus,
+                            pendingLocation,
+                            pendingAiResponse,
+                            new FirebaseReportManager.SaveCallback() {
+                                @Override
+                                public void onSuccess() {
+                                    Log.d(TAG, "Queued Firebase report update applied: " + firebaseReportId);
+                                }
+
+                                @Override
+                                public void onError(String error) {
+                                    Log.e(TAG, "Failed to apply queued Firebase update: " + error);
+                                }
+                            }
+                        );
                     }
                 }
 
                 @Override
                 public void onError(String error) {
+                    firebaseCreateInFlight = false;
                     Log.e(TAG, "Failed to save report to Firebase: " + error);
-                    if (isAdded()) {
-                        Toast.makeText(requireContext(), "Failed to save report", Toast.LENGTH_SHORT).show();
-                    }
                 }
             });
         } else {
-            // Update existing report
-            Log.d(TAG, "Updating report " + currentReportId + " with address: " + finalAddress + ", status: " + addressStatus);
-            
-            firebaseReportManager.updateReport(currentReportId, description, finalAddress, 
-                    addressStatus, location, aiResponse, new FirebaseReportManager.SaveCallback() {
-                @Override
-                public void onSuccess() {
-                    Log.d(TAG, "Emergency report updated in Firebase: " + currentReportId);
-                    if (isAdded()) {
-                        Toast.makeText(requireContext(), "✓ Report updated", Toast.LENGTH_SHORT).show();
+            firebaseReportManager.updateReport(firebaseReportId, description, finalAddress,
+                addressStatus, location, aiResponse, new FirebaseReportManager.SaveCallback() {
+                    @Override
+                    public void onSuccess() {
+                        Log.d(TAG, "Emergency report updated in Firebase: " + firebaseReportId);
                     }
-                }
 
-                @Override
-                public void onError(String error) {
-                    Log.e(TAG, "Failed to update report: " + error);
-                    if (isAdded()) {
-                        Toast.makeText(requireContext(), "Failed to update report", Toast.LENGTH_SHORT).show();
+                    @Override
+                    public void onError(String error) {
+                        Log.e(TAG, "Failed to update report: " + error);
                     }
-                }
-            });
+                });
         }
     }
 
