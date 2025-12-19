@@ -117,9 +117,7 @@ public class ChatFragment extends Fragment {
         
         setupEmergencyButtons();
         setupInputActions();
-        if (AppPreferences.isAutoSendLocationEnabled(requireContext())) {
-            requestLocationPermissionAndFetch();
-        }
+        requestLocationPermissionAndFetch();
 
         return view;
     }
@@ -659,10 +657,6 @@ public class ChatFragment extends Fragment {
     }
     
     private void refreshLocationAndSave(String emergencyType, String description, String aiResponse) {
-        if (!AppPreferences.isAutoSendLocationEnabled(requireContext())) {
-            performSaveOrUpdate(emergencyType, description, aiResponse);
-            return;
-        }
         // Try to get fresh location before saving
         if (ContextCompat.checkSelfPermission(requireContext(), 
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -705,26 +699,26 @@ public class ChatFragment extends Fragment {
         Log.d(TAG, "Address - Final used: " + finalAddress);
         Log.d(TAG, "Address - Status: " + addressStatus);
         
-        final boolean autoSendLocationEnabled = AppPreferences.isAutoSendLocationEnabled(requireContext());
-
-        // Use real GPS coordinates if available (only if setting enabled)
-        String latitude = (autoSendLocationEnabled && currentLocation != null)
+        // Use real GPS coordinates if available
+        String latitude = (currentLocation != null)
             ? String.format("%.6f", currentLocation.getLatitude())
             : "0.0";
 
-        String longitude = (autoSendLocationEnabled && currentLocation != null)
+        String longitude = (currentLocation != null)
             ? String.format("%.6f", currentLocation.getLongitude())
             : "0.0";
         
         Log.d(TAG, "Saving with coordinates - Lat: " + latitude + ", Lon: " + longitude + ", Has currentLocation: " + (currentLocation != null));
             
         String location;
-        if (!autoSendLocationEnabled) {
-            location = finalAddress.isEmpty() ? "Location not shared" : finalAddress;
+        if (!finalAddress.isEmpty() && currentLocation != null) {
+            location = finalAddress + " (" + latitude + "° N, " + longitude + "° E)";
+        } else if (!finalAddress.isEmpty()) {
+            location = finalAddress;
+        } else if (currentLocation != null) {
+            location = latitude + "° N, " + longitude + "° E (GPS only)";
         } else {
-            location = finalAddress.isEmpty()
-                ? latitude + "° N, " + longitude + "° E (GPS only - no address provided)"
-                : finalAddress + " (" + latitude + "° N, " + longitude + "° E)";
+            location = "Location unavailable";
         }
 
         // 1) Save to local history (personalized per-device)

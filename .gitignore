@@ -50,3 +50,5 @@ Desktop.ini
 # IMPORTANT: API Keys and Secrets
 # Remove API key from GeminiClient.java before committing!
 # Consider using BuildConfig or environment variables instead
+
+VIDEO_VOICEOVER_SCRIPTS.md

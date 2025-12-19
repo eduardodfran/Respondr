@@ -20,7 +20,6 @@ public class SettingsFragment extends Fragment {
     public static final String KEY_SAVE_HISTORY_ENABLED = AppPreferences.KEY_SAVE_HISTORY_ENABLED;
 
     private Switch switchNotifications;
-    private Switch switchAutoSend;
     private Switch switchSaveHistory;
     private Button btnClearHistory;
     private TextView tvAppVersion;
@@ -36,7 +35,6 @@ public class SettingsFragment extends Fragment {
 
         // Initialize views
         switchNotifications = view.findViewById(R.id.switchNotifications);
-        switchAutoSend = view.findViewById(R.id.switchAutoSend);
         switchSaveHistory = view.findViewById(R.id.switchSaveHistory);
         btnClearHistory = view.findViewById(R.id.btnClearHistory);
         tvAppVersion = view.findViewById(R.id.tvAppVersion);
@@ -55,7 +53,6 @@ public class SettingsFragment extends Fragment {
 
     private void loadSettings() {
         switchNotifications.setChecked(prefs.getBoolean(AppPreferences.KEY_NOTIFICATIONS_ENABLED, true));
-        switchAutoSend.setChecked(prefs.getBoolean(AppPreferences.KEY_AUTO_SEND_LOCATION, true));
         switchSaveHistory.setChecked(prefs.getBoolean(AppPreferences.KEY_SAVE_HISTORY_ENABLED, true));
     }
 
@@ -64,13 +61,6 @@ public class SettingsFragment extends Fragment {
             prefs.edit().putBoolean(AppPreferences.KEY_NOTIFICATIONS_ENABLED, isChecked).apply();
             Toast.makeText(requireContext(), 
                 isChecked ? "Notifications enabled" : "Notifications disabled", 
-                Toast.LENGTH_SHORT).show();
-        });
-
-        switchAutoSend.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            prefs.edit().putBoolean(AppPreferences.KEY_AUTO_SEND_LOCATION, isChecked).apply();
-            Toast.makeText(requireContext(), 
-                isChecked ? "Auto-send location enabled" : "Auto-send location disabled", 
                 Toast.LENGTH_SHORT).show();
         });
 
