@@ -90,9 +90,3 @@ Or open the project in **Android Studio** and click **Run**.
 
 ---
 
-## Resume-ready summary
-
-If you want to reference this project:
-
-**Respondr | AI Emergency Assistant**  
-Built an Android app that captures voice/text emergency reports, uses Gemini AI to classify incident type, and outputs structured, geotagged alert data for dispatcher-style workflows.
