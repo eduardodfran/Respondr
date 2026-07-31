@@ -24,16 +24,6 @@ Respondr explores how AI can help transform raw user input into a cleaner, categ
 
 ---
 
-## Demo / Screenshots
-
-Add screenshots or a short demo video/GIF here.
-
-Example:
-- `docs/screenshots/home.png`
-- `docs/screenshots/analysis.png`
-
----
-
 ## Tech stack
 
 - **Language:** Java
@@ -106,9 +96,3 @@ If you want to reference this project:
 
 **Respondr | AI Emergency Assistant**  
 Built an Android app that captures voice/text emergency reports, uses Gemini AI to classify incident type, and outputs structured, geotagged alert data for dispatcher-style workflows.
-
----
-
-## License
-
-Add your license here (for example, MIT) once selected.
