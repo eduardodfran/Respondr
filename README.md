@@ -73,6 +73,12 @@ Or open the project in **Android Studio** and click **Run**.
 
 ---
 
+## Related repository
+
+- Respondr Admin: https://github.com/eduardodfran/respondr-admin
+
+---
+
 ## Current limitations
 
 - Prototype only (not production emergency infrastructure)
@@ -87,12 +93,5 @@ Or open the project in **Android Studio** and click **Run**.
 - API keys are loaded from `local.properties` at build time
 - Do **not** commit secrets or keystore files
 - Review your `.gitignore` before pushing changes
-
----
-
-## Related SIPAT repositories
-
-- SIPAT App: https://github.com/eduardodfran/SipatApp
-- SIPAT Web: https://github.com/eduardodfran/sipat-web
 
 ---
