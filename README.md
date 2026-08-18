@@ -73,6 +73,12 @@ Or open the project in **Android Studio** and click **Run**.
 
 ---
 
+## Related repository
+
+- Respondr Admin: https://github.com/eduardodfran/respondr-admin
+
+---
+
 ## Current limitations
 
 - Prototype only (not production emergency infrastructure)
@@ -89,4 +95,3 @@ Or open the project in **Android Studio** and click **Run**.
 - Review your `.gitignore` before pushing changes
 
 ---
-
