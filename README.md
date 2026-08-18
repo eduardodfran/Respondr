@@ -90,3 +90,9 @@ Or open the project in **Android Studio** and click **Run**.
 
 ---
 
+## Related SIPAT repositories
+
+- SIPAT App: https://github.com/eduardodfran/SipatApp
+- SIPAT Web: https://github.com/eduardodfran/sipat-web
+
+---
